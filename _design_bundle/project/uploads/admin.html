@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>管理 — Project Management</title>
+
+  <meta name="theme-color" content="#051232" />
+  <link rel="manifest" href="manifest.json" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles.css" />
+
+  <style>
+    .admin-shell {
+      display: flex; flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .admin-tabs {
+      display: flex;
+      padding: 0 32px;
+      background: white;
+      border-bottom: 1px solid var(--steel-200);
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .admin-tab {
+      padding: 14px 18px;
+      font-weight: 700; font-size: 13px;
+      color: var(--steel-500);
+      border-bottom: 3px solid transparent;
+      transition: all 0.15s;
+      letter-spacing: 0.04em;
+    }
+    .admin-tab:hover { color: var(--steel-900); }
+    .admin-tab.active {
+      color: var(--brand-800);
+      border-bottom-color: var(--cyan-bright);
+    }
+    .admin-content {
+      flex: 1; overflow-y: auto;
+      padding: 24px 32px 48px;
+      background: var(--steel-50);
+    }
+    .admin-section { display: none; }
+    .admin-section.active { display: block; }
+
+    .table {
+      width: 100%;
+      background: white;
+      border: 1px solid var(--steel-200);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      border-collapse: collapse;
+      box-shadow: var(--shadow-soft);
+    }
+    .table th, .table td { padding: 13px 16px; text-align: left; font-size: 13px; }
+    .table th {
+      background: var(--brand-50);
+      font-weight: 800;
+      font-size: 10.5px;
+      color: var(--brand-800);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid var(--steel-200);
+    }
+    .table tr { border-bottom: 1px solid var(--steel-100); }
+    .table tr:last-child { border-bottom: 0; }
+    .table tr:hover td { background: var(--brand-50); }
+  </style>
+</head>
+<body>
+
+<div class="admin-shell">
+
+  <div class="topbar">
+    <a class="back-link" href="index.html" style="color: rgba(255,255,255,0.75); padding: 6px 10px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      一覧へ
+    </a>
+
+    <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.15);"></div>
+
+    <div class="brand">
+      <div class="brand-logo">
+        <img src="icons/logo.jpg" alt="LINE WORKS" style="width:28px; height:28px; object-fit: contain;" />
+      </div>
+      <div>
+        <div class="brand-name">LINE WORKS</div>
+        <div class="brand-sub">管理画面</div>
+      </div>
+    </div>
+
+    <div style="flex: 1;"></div>
+  </div>
+
+  <div style="padding: 28px 32px 0; background: var(--steel-50);">
+    <div class="page-title">管理</div>
+    <div class="page-rule"></div>
+  </div>
+
+  <!-- タブ: 連絡先 / テンプレート の2つ -->
+  <div class="admin-tabs">
+    <button class="admin-tab active" onclick="showSection('contacts', this)">連絡先</button>
+    <button class="admin-tab" onclick="showSection('templates', this)">テンプレート</button>
+  </div>
+
+  <div class="admin-content">
+
+    <!-- 連絡先タブ -->
+    <div class="admin-section active" id="sec-contacts">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 18px;">
+        <div class="searchbar" style="max-width: 360px;">
+          <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--steel-500)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" placeholder="連絡先を検索…" style="background: white; color: var(--steel-900); border: 1px solid var(--steel-300);" />
+        </div>
+        <div style="margin-left: auto; display: flex; gap: 8px;">
+          <button class="btn btn-ghost btn-sm">CSV 出力</button>
+          <button class="btn btn-primary btn-sm">＋ 追加</button>
+        </div>
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>表示名</th>
+            <th>メール</th>
+            <th>会社</th>
+            <th>メモ</th>
+            <th style="width: 80px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="font-weight: 700;">コマツ金沢 田中様</td>
+            <td class="text-mono" style="font-size: 11px;">tanaka@komatsu.co.jp</td>
+            <td>コマツ金沢</td>
+            <td class="text-subtle">納入連絡担当</td>
+            <td><button class="btn btn-ghost btn-sm">編集</button></td>
+          </tr>
+          <tr>
+            <td style="font-weight: 700;">コマツ金沢 鈴木様</td>
+            <td class="text-mono" style="font-size: 11px;">suzuki@komatsu.co.jp</td>
+            <td>コマツ金沢</td>
+            <td class="text-subtle">設計受領担当</td>
+            <td><button class="btn btn-ghost btn-sm">編集</button></td>
+          </tr>
+          <tr>
+            <td style="font-weight: 700;">○○商事 佐藤様</td>
+            <td class="text-mono" style="font-size: 11px;">sato@oo-shoji.co.jp</td>
+            <td>○○商事</td>
+            <td class="text-subtle">ベアリング納期</td>
+            <td><button class="btn btn-ghost btn-sm">編集</button></td>
+          </tr>
+          <tr>
+            <td style="font-weight: 700;">△△精機 高橋様</td>
+            <td class="text-mono" style="font-size: 11px;">takahashi@sankakukoki.co.jp</td>
+            <td>△△精機</td>
+            <td class="text-subtle">板金加工依頼</td>
+            <td><button class="btn btn-ghost btn-sm">編集</button></td>
+          </tr>
+          <tr>
+            <td style="font-weight: 700;">社内設計部</td>
+            <td class="text-mono" style="font-size: 11px;">design@example.com</td>
+            <td>(社内)</td>
+            <td class="text-subtle">CCで常時通知</td>
+            <td><button class="btn btn-ghost btn-sm">編集</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- テンプレートタブ -->
+    <div class="admin-section" id="sec-templates">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 18px;">
+        <div style="color: var(--steel-500); font-size: 13px;">メールテンプレート — 3種類</div>
+        <button class="btn btn-primary btn-sm" style="margin-left:auto;">＋ 新規テンプレ</button>
+      </div>
+
+      <div style="border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-soft); background: white; border: 1px solid var(--steel-200);">
+        <div style="padding: 16px 18px; border-bottom: 1px solid var(--steel-100); display: grid; grid-template-columns: 1fr auto; gap: 14px;">
+          <div>
+            <div style="font-weight: 800; color: var(--brand-950);">出図通知（標準） <span class="chip" style="margin-left:8px;">デフォルト</span></div>
+            <div style="font-size: 11px; color: var(--steel-500); margin-top: 4px;">件名: 【出図通知】{{job_no}} {{customer_name}} / {{axis_name}}</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-ghost btn-sm">編集</button>
+            <button class="btn btn-ghost btn-sm">複製</button>
+          </div>
+        </div>
+
+        <div style="padding: 16px 18px; border-bottom: 1px solid var(--steel-100); display: grid; grid-template-columns: 1fr auto; gap: 14px;">
+          <div>
+            <div style="font-weight: 800; color: var(--brand-950);">差替連絡</div>
+            <div style="font-size: 11px; color: var(--steel-500); margin-top: 4px;">件名: 【差替】{{job_no}} {{axis_name}} 差し替え図面のお知らせ</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-ghost btn-sm">編集</button>
+            <button class="btn btn-ghost btn-sm">複製</button>
+            <button class="btn btn-ghost btn-sm">削除</button>
+          </div>
+        </div>
+
+        <div style="padding: 16px 18px; display: grid; grid-template-columns: 1fr auto; gap: 14px;">
+          <div>
+            <div style="font-weight: 800; color: var(--brand-950);">納期回答</div>
+            <div style="font-size: 11px; color: var(--steel-500); margin-top: 4px;">件名: Re: 納期について {{job_no}}</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-ghost btn-sm">編集</button>
+            <button class="btn btn-ghost btn-sm">複製</button>
+            <button class="btn btn-ghost btn-sm">削除</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 24px; padding: 14px 16px; background: var(--brand-50); border: 1px solid var(--brand-200); border-radius: var(--radius); font-size: 12px; color: var(--brand-800);">
+        <strong style="letter-spacing: 0.04em;">VARIABLES</strong> &nbsp; {{job_no}} {{parent_job_no}} {{product_name}} {{customer_name}} {{due_date}} {{axis_name}} {{pdf_path}} {{releaser_name}} {{today}}
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- ボトムナビ -->
+<nav class="bottom-nav">
+  <a class="bnav-item" href="index.html">
+    <div class="bnav-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </div>
+    <span>一覧</span>
+  </a>
+  <a class="bnav-item active">
+    <div class="bnav-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </div>
+    <span>管理</span>
+  </a>
+</nav>
+
+
+<script>
+  function showSection(name, el) {
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('sec-' + name).classList.add('active');
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') location.href = 'index.html';
+  });
+</script>
+
+</body>
+</html>

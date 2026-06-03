@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Management — Redesign Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; font-family: "Inter Tight", "Noto Sans JP", system-ui, sans-serif; }
+    #root { height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="variants/data.jsx"></script>
+  <script type="text/babel" src="variants/variant-d.jsx"></script>
+  <script type="text/babel" src="variants/variant-a.jsx"></script>
+  <script type="text/babel" src="variants/variant-b.jsx"></script>
+  <script type="text/babel" src="variants/variant-c.jsx"></script>
+  <script type="text/babel" src="variants/mobile.jsx"></script>
+
+  <script type="text/babel">
+    const { VariantA, VariantB, VariantC, VariantD, VariantDDetail,
+            MobileA, MobileB, MobileC, MobileD } = window;
+
+    function NotesIntro() {
+      return (
+        <div style={{
+          position: 'relative', width: 380, padding: '22px 24px',
+          background: '#fef4a8', boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+          fontFamily: '"Inter Tight", "Noto Sans JP", system-ui, sans-serif',
+          color: '#5a4a2a', borderRadius: 2, transform: 'rotate(-1deg)',
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.6, marginBottom: 8 }}>Update</div>
+          <h3 style={{ margin: '0 0 10px', fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>「シンプル」方向に作り直しました</h3>
+          <p style={{ fontSize: 12.5, lineHeight: 1.55, margin: '0 0 10px' }}>
+            ご指摘の通り、A/B/C は装飾が多すぎました。
+            Stock アプリと同じ視覚言語で <strong>Variant D · Minimal</strong> を新規追加し、
+            キャンバスの一番上に置いています。
+          </p>
+          <ul style={{ fontSize: 12, lineHeight: 1.55, margin: 0, paddingLeft: 18 }}>
+            <li>白背景・シアン1色のみ (Stockと同じ <code style={{ background: '#fff', padding: '0 4px', borderRadius: 2, fontSize: 11 }}>#06B6D4</code>)</li>
+            <li>統計・チップ・複数色バッジを全部削除</li>
+            <li>1工番 = 1行。進捗は細い線1本だけ</li>
+            <li>納期の警告は文字色のみで表現</li>
+            <li>工程名は小さく薄く、現在地点だけ濃く</li>
+          </ul>
+          <p style={{ fontSize: 11.5, lineHeight: 1.5, margin: '12px 0 0', opacity: 0.75, fontStyle: 'italic' }}>
+            参考までに A/B/C は下に残しています。Stock のスクリーンショットがあれば、
+            さらに合わせ込めます。
+          </p>
+        </div>
+      );
+    }
+
+    function App() {
+      return (
+        <DesignCanvas defaultZoom={0.6}>
+          <DCSection id="intro" title="読んでください" subtitle="新方向の説明">
+            <DCArtboard id="notes" label="Update note" width={380} height={400} chromeless>
+              <NotesIntro/>
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="d-featured" title="★ Variant D · Minimal (Stock 風)" subtitle="白 · シアン1色 · 装飾なし — 推奨案">
+            <DCArtboard id="d-desktop" label="工番一覧 — Desktop" width={1280} height={840}>
+              <VariantD/>
+            </DCArtboard>
+            <DCArtboard id="d-detail" label="工番詳細 — Desktop" width={1280} height={840}>
+              <VariantDDetail/>
+            </DCArtboard>
+            <DCArtboard id="d-mobile" label="工番一覧 — Mobile" width={390} height={780}>
+              <MobileD/>
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="desktop-prev" title="（参考）以前の3案 — Desktop" subtitle="残してありますが、棄却で良ければ削除します">
+            <DCArtboard id="a-desktop" label="A · Editorial" width={1280} height={840}>
+              <VariantA/>
+            </DCArtboard>
+            <DCArtboard id="b-desktop" label="B · Console (dark)" width={1280} height={840}>
+              <VariantB/>
+            </DCArtboard>
+            <DCArtboard id="c-desktop" label="C · River Flow" width={1280} height={840}>
+              <VariantC/>
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="mobile-prev" title="（参考）以前の3案 — Mobile" subtitle="">
+            <DCArtboard id="a-mobile" label="A · Editorial" width={390} height={780}>
+              <MobileA/>
+            </DCArtboard>
+            <DCArtboard id="b-mobile" label="B · Console" width={390} height={780}>
+              <MobileB/>
+            </DCArtboard>
+            <DCArtboard id="c-mobile" label="C · River Flow" width={390} height={780}>
+              <MobileC/>
+            </DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  </script>
+</body>
+</html>

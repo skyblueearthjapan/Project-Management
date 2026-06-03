@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Project Management — LINE WORKS</title>
+
+  <meta name="theme-color" content="#051232" />
+  <meta name="apple-mobile-web-app-title" content="PM" />
+  <link rel="manifest" href="manifest.json" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- TopBar (LINE WORKS ブランド・紺色ダーク) -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-logo">
+        <img src="icons/logo.jpg" alt="LINE WORKS" style="width:28px; height:28px; object-fit: contain;" />
+      </div>
+      <div>
+        <div class="brand-name">LINE WORKS</div>
+        <div class="brand-sub">Project Management</div>
+      </div>
+    </div>
+
+    <div class="searchbar">
+      <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" placeholder="工番・納入先・製品名で検索…" />
+    </div>
+
+    <button class="btn btn-primary hide-on-touch" onclick="openModal('release-modal')" style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); color: white;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+      出図
+    </button>
+
+    <button class="btn-icon hide-on-touch" title="メール作成" onclick="openModal('mail-modal')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+    </button>
+
+    <button class="btn-icon hide-on-touch" title="管理" onclick="location.href='admin.html'">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    <div class="content-narrow">
+      <div class="page-head">
+        <div>
+          <div class="page-title">工番一覧</div>
+        </div>
+        <div class="page-meta">5 件</div>
+      </div>
+      <div class="page-rule"></div>
+
+      <div class="job-list">
+
+        <!-- 工番1: コマツ金沢 (進行中) -->
+        <div class="job-row" onclick="location.href='detail.html'">
+          <div class="job-row-head">
+            <span class="job-no">25214</span>
+            <span class="job-customer">コマツ金沢</span>
+            <span class="job-product">/ アライメント装置</span>
+            <span class="job-due warning">納期 6/30</span>
+          </div>
+          <div class="job-progress">
+            <div class="progress-meta">
+              <span class="progress-pct">35%</span>
+              <span class="progress-now-badge">⑦ 工場出図 進行中</span>
+              <span class="progress-axis-count">4軸中 1未着手</span>
+            </div>
+            <div class="timeline">
+              <div class="t-step mixed"><div class="t-bar"></div><div class="t-num">01</div><div class="t-label">出図前チェック</div></div>
+              <div class="t-step mixed"><div class="t-bar"></div><div class="t-num">02</div><div class="t-label">設計出図</div></div>
+              <div class="t-step mixed"><div class="t-bar"></div><div class="t-num">03</div><div class="t-label">在庫チェック</div></div>
+              <div class="t-step in-prog"><div class="t-bar"></div><div class="t-num">04</div><div class="t-label">購入</div></div>
+              <div class="t-step mixed"><div class="t-bar"></div><div class="t-num">05</div><div class="t-label">材料</div></div>
+              <div class="t-step mixed"><div class="t-bar"></div><div class="t-num">06</div><div class="t-label">材料チェック</div></div>
+              <div class="t-step in-prog"><div class="t-bar"></div><div class="t-num">07</div><div class="t-label">工場出図</div></div>
+              <div class="t-step mixed"><div class="t-bar"></div><div class="t-num">08</div><div class="t-label">水すまし</div></div>
+              <div class="t-step mixed"><div class="t-bar"></div><div class="t-num">09</div><div class="t-label">ボルト</div></div>
+              <div class="t-step mixed"><div class="t-bar"></div><div class="t-num">10</div><div class="t-label">組立出図</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 工番2: XYZ製作所 (進行中) -->
+        <div class="job-row" onclick="location.href='detail.html'">
+          <div class="job-row-head">
+            <span class="job-no">25215</span>
+            <span class="job-customer">XYZ製作所</span>
+            <span class="job-product">/ 検査ライン</span>
+            <span class="job-due">納期 7/15</span>
+          </div>
+          <div class="job-progress">
+            <div class="progress-meta">
+              <span class="progress-pct">60%</span>
+              <span class="progress-now-badge">⑥ 材料チェック 進行中</span>
+              <span class="progress-axis-count">2軸</span>
+            </div>
+            <div class="timeline">
+              <div class="t-step done"><div class="t-bar"></div><div class="t-num">01</div><div class="t-label">出図前チェック</div></div>
+              <div class="t-step done"><div class="t-bar"></div><div class="t-num">02</div><div class="t-label">設計出図</div></div>
+              <div class="t-step done"><div class="t-bar"></div><div class="t-num">03</div><div class="t-label">在庫チェック</div></div>
+              <div class="t-step done"><div class="t-bar"></div><div class="t-num">04</div><div class="t-label">購入</div></div>
+              <div class="t-step done"><div class="t-bar"></div><div class="t-num">05</div><div class="t-label">材料</div></div>
+              <div class="t-step in-prog"><div class="t-bar"></div><div class="t-num">06</div><div class="t-label">材料チェック</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">07</div><div class="t-label">工場出図</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">08</div><div class="t-label">水すまし</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">09</div><div class="t-label">ボルト</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">10</div><div class="t-label">組立出図</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 工番3: ABC工業 -->
+        <div class="job-row" onclick="location.href='detail.html'">
+          <div class="job-row-head">
+            <span class="job-no">25216</span>
+            <span class="job-customer">ABC工業</span>
+            <span class="job-product">/ 進行中</span>
+            <span class="job-due">納期 8/10</span>
+          </div>
+          <div class="job-progress">
+            <div class="progress-meta">
+              <span class="progress-pct">30%</span>
+              <span class="progress-now-badge">④ 購入 進行中</span>
+              <span class="progress-axis-count">3軸</span>
+            </div>
+            <div class="timeline">
+              <div class="t-step done"><div class="t-bar"></div><div class="t-num">01</div><div class="t-label">出図前チェック</div></div>
+              <div class="t-step mixed"><div class="t-bar"></div><div class="t-num">02</div><div class="t-label">設計出図</div></div>
+              <div class="t-step in-prog"><div class="t-bar"></div><div class="t-num">03</div><div class="t-label">在庫チェック</div></div>
+              <div class="t-step in-prog"><div class="t-bar"></div><div class="t-num">04</div><div class="t-label">購入</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">05</div><div class="t-label">材料</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">06</div><div class="t-label">材料チェック</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">07</div><div class="t-label">工場出図</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">08</div><div class="t-label">水すまし</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">09</div><div class="t-label">ボルト</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">10</div><div class="t-label">組立出図</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 工番4: サンプル -->
+        <div class="job-row" onclick="location.href='detail.html'">
+          <div class="job-row-head">
+            <span class="job-no">TS25001</span>
+            <span class="job-customer">サンプル製作所</span>
+            <span class="job-product">/ 評価機</span>
+            <span class="job-due">納期 −</span>
+          </div>
+          <div class="job-progress">
+            <div class="progress-meta">
+              <span class="progress-pct">5%</span>
+              <span class="progress-now-badge">① 出図前チェック 進行中</span>
+              <span class="progress-axis-count">1軸</span>
+            </div>
+            <div class="timeline">
+              <div class="t-step in-prog"><div class="t-bar"></div><div class="t-num">01</div><div class="t-label">出図前チェック</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">02</div><div class="t-label">設計出図</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">03</div><div class="t-label">在庫チェック</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">04</div><div class="t-label">購入</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">05</div><div class="t-label">材料</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">06</div><div class="t-label">材料チェック</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">07</div><div class="t-label">工場出図</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">08</div><div class="t-label">水すまし</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">09</div><div class="t-label">ボルト</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">10</div><div class="t-label">組立出図</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 工番5: 期限超過 -->
+        <div class="job-row" onclick="location.href='detail.html'">
+          <div class="job-row-head">
+            <span class="job-no">25210</span>
+            <span class="job-customer">○○工業</span>
+            <span class="job-product">/ プレス機改造</span>
+            <span class="job-due danger">納期 5/20 超過</span>
+          </div>
+          <div class="job-progress">
+            <div class="progress-meta">
+              <span class="progress-pct">75%</span>
+              <span class="progress-now-badge">⑧ 水すまし 進行中</span>
+              <span class="progress-axis-count">2軸</span>
+            </div>
+            <div class="timeline">
+              <div class="t-step done"><div class="t-bar"></div><div class="t-num">01</div><div class="t-label">出図前チェック</div></div>
+              <div class="t-step done"><div class="t-bar"></div><div class="t-num">02</div><div class="t-label">設計出図</div></div>
+              <div class="t-step done"><div class="t-bar"></div><div class="t-num">03</div><div class="t-label">在庫チェック</div></div>
+              <div class="t-step done"><div class="t-bar"></div><div class="t-num">04</div><div class="t-label">購入</div></div>
+              <div class="t-step done"><div class="t-bar"></div><div class="t-num">05</div><div class="t-label">材料</div></div>
+              <div class="t-step done"><div class="t-bar"></div><div class="t-num">06</div><div class="t-label">材料チェック</div></div>
+              <div class="t-step done"><div class="t-bar"></div><div class="t-num">07</div><div class="t-label">工場出図</div></div>
+              <div class="t-step in-prog"><div class="t-bar"></div><div class="t-num">08</div><div class="t-label">水すまし</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">09</div><div class="t-label">ボルト</div></div>
+              <div class="t-step pending"><div class="t-bar"></div><div class="t-num">10</div><div class="t-label">組立出図</div></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- 出図モーダル -->
+<div class="overlay" id="release-modal" style="display:none;" onclick="if(event.target===this) closeModal('release-modal')">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">軸を出図</div>
+        <div class="modal-sub">25214 コマツ金沢 / 昇降軸</div>
+      </div>
+      <button class="close-btn" onclick="closeModal('release-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">PDF パス <span class="req">*</span></label>
+        <div class="file-card">
+          <div class="file-icon">PDF</div>
+          <div style="flex:1;">
+            <div style="font-weight:700;">25214_昇降.pdf</div>
+            <div class="text-mono text-subtle" style="font-size:11px;">\\lineworks-sv\Data\設計\drawings\25214\昇降.pdf</div>
+          </div>
+          <button class="btn btn-ghost btn-sm">変更</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">出図者名</label>
+          <input type="text" class="form-input" value="山田" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">コメント</label>
+          <input type="text" class="form-input" value="初回出図" />
+        </div>
+      </div>
+      <div style="background: var(--brand-50); border: 1px solid var(--brand-200); border-radius: var(--radius); padding: 12px 14px; display: flex; align-items: center; gap: 10px;">
+        <input type="checkbox" id="notify" checked style="accent-color: var(--brand-800); width:16px; height:16px;" />
+        <label for="notify" style="flex:1; cursor:pointer;">
+          <div style="font-weight: 700; font-size: 12.5px; color: var(--brand-800);">出図通知メールを作成する</div>
+        </label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('release-modal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="closeModal('release-modal'); openModal('mail-modal');">出図 + メール →</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.file-card {
+  display: flex; gap: 12px; align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--steel-200);
+  border-radius: var(--radius);
+  background: var(--steel-50);
+}
+.file-icon {
+  width: 44px; height: 44px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  display: grid; place-items: center;
+  font-weight: 800; font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.04em;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.3) inset, 0 4px 10px -2px rgba(239, 68, 68, 0.35);
+}
+</style>
+
+
+<!-- メールモーダル -->
+<div class="overlay" id="mail-modal" style="display:none;" onclick="if(event.target===this) closeModal('mail-modal')">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">メールを作成</div>
+        <div class="modal-sub">テンプレートを選んで、宛先と本文を編集</div>
+      </div>
+      <button class="close-btn" onclick="closeModal('mail-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">テンプレート</label>
+        <select class="form-select">
+          <option>出図通知（標準）</option>
+          <option>差替連絡</option>
+          <option>納期回答</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">宛先</label>
+        <div class="recipient-chips">
+          <span class="recipient">コマツ金沢 田中様 <button>×</button></span>
+          <button class="add-recipient">＋ 連絡先を選択</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">件名</label>
+        <input type="text" class="form-input" value="【出図通知】25214 コマツ金沢 / 昇降軸" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">本文</label>
+        <textarea class="form-textarea" rows="8">コマツ金沢
+田中様
+
+いつもお世話になっております。
+
+下記、出図のお知らせです。
+工番:   25214
+軸:     昇降軸
+納期:   6/30
+パス:   \\lineworks-sv\Data\設計\drawings\25214\昇降.pdf
+
+ご確認のほど、よろしくお願いいたします。
+山田</textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mail-modal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="closeModal('mail-modal'); showToast('Outlookに下書きを作成しました');">下書きを作成</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.recipient-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--steel-300);
+  border-radius: var(--radius);
+  background: white;
+  min-height: 44px;
+  align-items: center;
+}
+.recipient {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--brand-100);
+  color: var(--brand-800);
+  border: 1px solid var(--brand-300);
+  border-radius: var(--radius-sm);
+  padding: 4px 4px 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.recipient button {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: rgba(13, 58, 130, 0.15);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand-800);
+  display: grid; place-items: center;
+}
+.add-recipient {
+  padding: 4px 10px;
+  border: 1px dashed var(--steel-300);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--steel-500);
+  font-weight: 600;
+}
+.add-recipient:hover { color: var(--brand-800); border-color: var(--brand-400); background: var(--brand-50); }
+</style>
+
+
+<!-- ボトムナビ -->
+<nav class="bottom-nav">
+  <a class="bnav-item active" href="index.html">
+    <div class="bnav-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </div>
+    <span>一覧</span>
+  </a>
+  <a class="bnav-item">
+    <div class="bnav-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+    </div>
+    <span>検索</span>
+  </a>
+  <a class="bnav-item" href="admin.html">
+    <div class="bnav-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+    </div>
+    <span>その他</span>
+  </a>
+</nav>
+
+
+<div class="toast-stack" id="toasts"></div>
+<div class="watermark">LINE WORKS • PM v2.0</div>
+
+
+<script>
+  function openModal(id) { document.getElementById(id).style.display = 'grid'; }
+  function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+  function showToast(text) {
+    const stack = document.getElementById('toasts');
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-bright)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg><span>${text}</span><button onclick="this.parentElement.remove()">閉じる</button>`;
+    stack.appendChild(t);
+    setTimeout(() => t.remove(), 3500);
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.overlay').forEach(o => o.style.display = 'none');
+    }
+  });
+</script>
+
+</body>
+</html>

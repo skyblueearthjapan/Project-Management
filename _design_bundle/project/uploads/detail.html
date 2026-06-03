@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>25214 — Project Management</title>
+
+  <meta name="theme-color" content="#051232" />
+  <meta name="apple-mobile-web-app-title" content="PM" />
+  <link rel="manifest" href="manifest.json" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles.css" />
+
+  <style>
+    /* === Detail v2.0 LINE WORKS ブランド === */
+    .detail-shell {
+      display: grid;
+      grid-template-rows: 60px 52px 1fr 56px;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* TopBar: 戻る + 工番情報 + メール (紺色ダーク) */
+    .topbar-info {
+      display: flex; align-items: baseline; gap: 12px;
+      flex: 1; min-width: 0;
+      color: white;
+    }
+    .topbar-jobno {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+      color: white;
+    }
+    .topbar-customer {
+      font-weight: 700;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.9);
+    }
+    .topbar-product {
+      color: rgba(255, 255, 255, 0.55);
+      font-size: 12px;
+    }
+    .topbar-due-pill {
+      font-size: 11px;
+      padding: 4px 11px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.12);
+      color: white;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.02em;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+    .topbar-due-pill.warning {
+      background: rgba(255, 136, 0, 0.18);
+      border-color: rgba(255, 136, 0, 0.5);
+    }
+    .back-link {
+      color: rgba(255, 255, 255, 0.75);
+      display: inline-flex; align-items: center; gap: 6px;
+      font-weight: 600; font-size: 12px;
+      flex-shrink: 0;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      transition: all 0.15s;
+    }
+    .back-link:hover {
+      color: white;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    /* メインエリア: PDF + 右ペイン */
+    .detail-main {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      overflow: hidden;
+      background: var(--steel-100);
+      transition: grid-template-columns 280ms cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+    }
+    .detail-main.pane-collapsed { grid-template-columns: 1fr 0; }
+    .detail-main.pane-collapsed .side-pane {
+      transform: translateX(100%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .side-pane { transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms; }
+
+    .pane-toggle-btn {
+      position: absolute;
+      right: 300px;
+      top: 50%;
+      transform: translate(50%, -50%);
+      width: 26px;
+      height: 56px;
+      background: white;
+      border: 1px solid var(--steel-300);
+      border-radius: var(--radius);
+      display: grid; place-items: center;
+      cursor: pointer;
+      z-index: 8;
+      transition: right 280ms cubic-bezier(0.16, 1, 0.3, 1), background 0.15s;
+      box-shadow: var(--shadow-soft);
+      color: var(--steel-500);
+    }
+    .pane-toggle-btn:hover {
+      background: var(--brand-50);
+      color: var(--brand-800);
+      border-color: var(--brand-400);
+    }
+    .pane-toggle-btn svg { transition: transform 280ms; }
+    .detail-main.pane-collapsed .pane-toggle-btn { right: 0; }
+    .detail-main.pane-collapsed .pane-toggle-btn svg { transform: rotate(180deg); }
+
+    /* PDFエリア */
+    .pdf-area {
+      overflow-y: auto;
+      overflow-x: auto;
+      padding: 14px 12px 50px;
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+    }
+    .pdf-toolbar {
+      position: sticky;
+      top: 0;
+      background: rgba(255,255,255,0.97);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--steel-200);
+      border-radius: var(--radius);
+      padding: 4px 8px;
+      display: flex; align-items: center; gap: 3px;
+      margin-bottom: 14px;
+      z-index: 5;
+      box-shadow: var(--shadow-soft);
+      height: 40px;
+    }
+    .pdf-toolbar .btn-icon { width: 30px; height: 30px; }
+    .pdf-toolbar .spacer { flex: 1; }
+    .pdf-toolbar .pg-indicator {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 0 8px;
+      min-width: 50px;
+      text-align: center;
+      color: var(--steel-700);
+    }
+    .pdf-toolbar .zoom-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 0 6px;
+      min-width: 44px;
+      text-align: center;
+      color: var(--steel-700);
+    }
+
+    .pdf-page {
+      background: white;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 16px 40px -16px rgba(5, 18, 50, 0.25);
+      border-radius: var(--radius);
+      margin: 0 auto 16px;
+      width: min(900px, 100%);
+      aspect-ratio: 1 / 1.414;
+      padding: 36px;
+      font-size: 11px;
+      color: var(--steel-700);
+      position: relative;
+      border: 1px solid var(--steel-200);
+    }
+    .pdf-page .page-num {
+      position: absolute;
+      right: 14px; bottom: 12px;
+      color: var(--steel-400);
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .pdf-page-head {
+      border-bottom: 2px solid var(--steel-300);
+      padding-bottom: 8px;
+      margin-bottom: 16px;
+      display: flex; justify-content: space-between; align-items: baseline;
+    }
+    .pdf-page-title { font-weight: 800; font-size: 14px; color: var(--brand-950); }
+    .pdf-drawing {
+      background: repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(0,0,0,0.04) 20px),
+                  repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(0,0,0,0.04) 20px);
+      border: 1px solid var(--steel-200);
+      height: 420px;
+      position: relative;
+      margin-bottom: 16px;
+    }
+    .pdf-drawing svg { width: 100%; height: 100%; }
+
+    /* 右ペイン (DXF + リンク サブタブ) */
+    .side-pane {
+      background: white;
+      border-left: 1px solid var(--steel-200);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .side-tabs {
+      display: flex;
+      padding: 0;
+      background: var(--brand-50);
+      border-bottom: 1px solid var(--steel-200);
+    }
+    .side-tab {
+      flex: 1;
+      padding: 12px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--steel-500);
+      background: transparent;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .side-tab:hover { color: var(--brand-800); }
+    .side-tab.active {
+      color: var(--brand-800);
+      background: white;
+      border-bottom-color: var(--cyan-bright);
+    }
+    .side-tab .count {
+      background: var(--steel-200);
+      padding: 1px 7px;
+      border-radius: var(--radius-pill);
+      font-size: 10px;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--steel-600);
+    }
+    .side-tab.active .count {
+      background: var(--brand-800);
+      color: white;
+    }
+
+    .side-list { flex: 1; overflow-y: auto; min-height: 0; }
+    .side-section { display: none; }
+    .side-section.active { display: block; }
+
+    .item-row {
+      padding: 11px 14px;
+      display: flex;
+      gap: 11px;
+      align-items: center;
+      cursor: pointer;
+      border-bottom: 1px solid var(--steel-100);
+      transition: background 0.15s;
+    }
+    .item-row:hover { background: var(--brand-50); }
+    .item-icon {
+      width: 30px; height: 30px;
+      border-radius: var(--radius-sm);
+      display: grid; place-items: center;
+      font-weight: 800; font-size: 9px;
+      font-family: 'JetBrains Mono', monospace;
+      flex-shrink: 0;
+      letter-spacing: 0.04em;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.3) inset;
+    }
+    .item-icon.dxf { background: var(--grad-brand); color: white; }
+    .item-icon.xlsx {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+    }
+    .item-icon.pdf {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: white;
+    }
+    .item-info { flex: 1; min-width: 0; }
+    .item-name {
+      font-weight: 700;
+      font-size: 12px;
+      line-height: 1.3;
+      word-break: break-all;
+      color: var(--steel-900);
+    }
+    .item-sub {
+      color: var(--steel-500);
+      font-size: 10.5px;
+      margin-top: 2px;
+      font-weight: 500;
+    }
+    .item-actions {
+      display: flex; gap: 2px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .item-row:hover .item-actions { opacity: 1; }
+    .item-actions .btn-icon { width: 26px; height: 26px; }
+
+    /* 下部の進捗バー (v2.0 メタリック) */
+    .progress-strip {
+      padding: 12px 24px;
+      background: var(--grad-brand-deep);
+      color: white;
+      display: flex; align-items: center; gap: 18px;
+      font-size: 12.5px;
+      position: relative;
+    }
+    .progress-strip::before {
+      content: '';
+      position: absolute;
+      left: 0; right: 0; top: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan-bright) 50%, transparent);
+      opacity: 0.4;
+    }
+    .progress-strip .axis-name-pill {
+      background: rgba(255, 255, 255, 0.12);
+      color: white;
+      padding: 4px 12px;
+      border-radius: var(--radius-sm);
+      font-weight: 700;
+      font-size: 11px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      letter-spacing: 0.04em;
+    }
+    .progress-strip .pct {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 800;
+      color: var(--cyan-bright);
+      font-size: 17px;
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+    .progress-strip .now-text {
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 600;
+      font-size: 12px;
+      display: flex; align-items: center; gap: 7px;
+    }
+    .progress-strip .now-text::before {
+      content: '';
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--in-prog);
+      box-shadow: 0 0 8px var(--in-prog);
+      animation: pulse 1.6s infinite;
+    }
+    .progress-strip .history-btn {
+      margin-left: auto;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .progress-strip .history-btn:hover {
+      background: rgba(255, 255, 255, 0.18);
+      border-color: var(--cyan-bright);
+    }
+
+    /* レスポンシブ */
+    @media (max-width: 1024px) {
+      .detail-main {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+        overflow: hidden;
+        min-height: 0;
+      }
+      .detail-main.pane-collapsed {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 0;
+      }
+      .detail-main.pane-collapsed .side-pane {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+      .pdf-area {
+        min-height: 0;
+        min-width: 0;
+      }
+      .pdf-page {
+        aspect-ratio: 1.414 / 1;  /* モバイルでは横向きA4 */
+        width: 100%;
+        padding: 16px;
+      }
+      .pdf-drawing { height: auto; aspect-ratio: 4/2.5; margin-bottom: 6px; }
+      .side-pane {
+        border-left: 0;
+        border-top: 1px solid var(--steel-200);
+        max-height: 200px;
+        min-height: 0;
+      }
+      .pane-toggle-btn {
+        right: 50%; top: auto; bottom: 200px;
+        transform: translate(50%, 50%);
+        width: 52px; height: 26px;
+        transition: bottom 280ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .pane-toggle-btn svg { transform: rotate(90deg); }
+      .detail-main.pane-collapsed .pane-toggle-btn { right: 50%; bottom: 0; }
+      .detail-main.pane-collapsed .pane-toggle-btn svg { transform: rotate(-90deg); }
+    }
+
+    @media (max-width: 640px) {
+      .detail-shell { grid-template-rows: 56px 44px 1fr 52px; }
+      .side-pane { max-height: 140px; }
+      .pane-toggle-btn { bottom: 140px; }
+      .progress-strip { padding: 10px 14px; gap: 10px; font-size: 11px; }
+      .progress-strip .axis-name-pill { font-size: 10px; padding: 3px 9px; }
+      .progress-strip .pct { font-size: 15px; }
+      .progress-strip .now-text { font-size: 10.5px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="detail-shell">
+
+  <!-- TopBar -->
+  <div class="topbar">
+    <a class="back-link" href="index.html">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      一覧
+    </a>
+
+    <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.15);"></div>
+
+    <div class="topbar-info">
+      <span class="topbar-jobno">25214</span>
+      <span class="topbar-customer">コマツ金沢</span>
+      <span class="topbar-product">/ アライメント装置</span>
+    </div>
+
+    <span class="topbar-due-pill warning">納期 6/30</span>
+
+    <button class="btn-icon hide-on-touch" title="メール作成" onclick="openModal('mail-modal')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+    </button>
+  </div>
+
+  <!-- 軸タブバー -->
+  <div class="axis-tab-bar">
+    <button class="axis-tab active"><span class="axis-badge done">✓</span>全体図</button>
+    <button class="axis-tab"><span class="axis-badge in-prog">●</span>昇降軸</button>
+    <button class="axis-tab"><span class="axis-badge in-prog">●</span>旋回軸</button>
+    <button class="axis-tab"><span class="axis-badge pending">○</span>走行軸</button>
+    <button class="axis-tab hide-on-touch" onclick="openModal('axis-add-modal')" style="color: var(--brand-700);">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+      追加
+    </button>
+  </div>
+
+  <!-- Main -->
+  <div class="detail-main" id="detail-main">
+
+    <button class="pane-toggle-btn" onclick="togglePane()" title="ペインの開閉">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+
+    <!-- PDF -->
+    <div class="pdf-area">
+      <div class="pdf-toolbar">
+        <button class="btn-icon" title="前ページ"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+        <span class="pg-indicator">1 / 4</span>
+        <button class="btn-icon" title="次ページ"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+        <div style="width:1px; height:18px; background: var(--steel-200); margin: 0 4px;"></div>
+        <button class="btn-icon" title="縮小"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="8" y1="11" x2="14" y2="11"/><path d="m21 21-4.3-4.3"/></svg></button>
+        <span class="zoom-val">100%</span>
+        <button class="btn-icon" title="拡大"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/><path d="m21 21-4.3-4.3"/></svg></button>
+        <button class="btn btn-ghost btn-sm" title="幅にフィット">FIT</button>
+
+        <div class="spacer"></div>
+
+        <button class="btn-icon hide-on-touch" title="PDFを差し替え" onclick="openModal('pdf-replace-modal')" style="color: var(--honey-deep);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/></svg>
+        </button>
+        <button class="btn-icon" title="印刷">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        </button>
+        <button class="btn-icon" title="ダウンロード">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+      </div>
+
+      <!-- PDFページ1 -->
+      <div class="pdf-page">
+        <div class="pdf-page-head">
+          <span class="pdf-page-title">アライメント装置 全体図</span>
+          <span style="font-family: 'JetBrains Mono', monospace; color: var(--steel-500); font-weight: 700;">25214 / Rev.A</span>
+        </div>
+        <div class="pdf-drawing">
+          <svg viewBox="0 0 600 420" preserveAspectRatio="xMidYMid meet">
+            <rect x="100" y="320" width="400" height="40" fill="none" stroke="#1a2332" stroke-width="2"/>
+            <line x1="100" y1="320" x2="100" y2="360" stroke="#1a2332" stroke-width="2"/>
+            <line x1="500" y1="320" x2="500" y2="360" stroke="#1a2332" stroke-width="2"/>
+            <rect x="180" y="80" width="240" height="240" fill="none" stroke="#0d3a82" stroke-width="2.5"/>
+            <circle cx="300" cy="200" r="55" fill="none" stroke="#0d3a82" stroke-width="2"/>
+            <circle cx="300" cy="200" r="20" fill="none" stroke="#0d3a82" stroke-width="1.5"/>
+            <line x1="245" y1="200" x2="355" y2="200" stroke="#0d3a82" stroke-width="1.5" stroke-dasharray="4 3"/>
+            <line x1="300" y1="145" x2="300" y2="255" stroke="#0d3a82" stroke-width="1.5" stroke-dasharray="4 3"/>
+            <rect x="135" y="80" width="40" height="240" fill="none" stroke="#1a2332" stroke-width="1.5"/>
+            <rect x="425" y="80" width="40" height="240" fill="none" stroke="#1a2332" stroke-width="1.5"/>
+            <g stroke="#64748b" stroke-width="0.8" fill="none">
+              <line x1="100" y1="380" x2="500" y2="380"/>
+              <line x1="100" y1="378" x2="100" y2="382"/>
+              <line x1="500" y1="378" x2="500" y2="382"/>
+            </g>
+            <text x="300" y="395" text-anchor="middle" fill="#64748b" font-size="11" font-family="monospace">2400</text>
+            <g stroke="#64748b" stroke-width="0.8" fill="none">
+              <line x1="540" y1="80" x2="540" y2="320"/>
+              <line x1="538" y1="80" x2="542" y2="80"/>
+              <line x1="538" y1="320" x2="542" y2="320"/>
+            </g>
+            <text x="555" y="200" fill="#64748b" font-size="11" font-family="monospace" transform="rotate(90, 555, 200)">1600</text>
+          </svg>
+        </div>
+        <span class="page-num">1 / 4</span>
+      </div>
+
+      <!-- PDFページ2 -->
+      <div class="pdf-page">
+        <div class="pdf-page-head">
+          <span class="pdf-page-title">アライメント装置 側面図</span>
+          <span style="font-family: 'JetBrains Mono', monospace; color: var(--steel-500); font-weight: 700;">25214 / Rev.A</span>
+        </div>
+        <div class="pdf-drawing">
+          <svg viewBox="0 0 600 420" preserveAspectRatio="xMidYMid meet">
+            <rect x="200" y="80" width="200" height="280" fill="none" stroke="#0d3a82" stroke-width="2.5"/>
+            <line x1="200" y1="200" x2="400" y2="200" stroke="#64748b" stroke-width="1" stroke-dasharray="3 3"/>
+            <circle cx="300" cy="200" r="40" fill="none" stroke="#0d3a82" stroke-width="2"/>
+            <rect x="280" y="100" width="40" height="100" fill="none" stroke="#1a2332" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <span class="page-num">2 / 4</span>
+      </div>
+
+    </div>
+
+    <!-- 右ペイン -->
+    <div class="side-pane">
+      <div class="side-tabs">
+        <button class="side-tab active" onclick="switchSide(this, 'side-dxf')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          DXF <span class="count">12</span>
+        </button>
+        <button class="side-tab" onclick="switchSide(this, 'side-links')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.71"/></svg>
+          リンク <span class="count">3</span>
+        </button>
+      </div>
+
+      <div class="side-list">
+        <div class="side-section active" id="side-dxf">
+          <div class="item-row" onclick="location.href='dxf.html'">
+            <div class="item-icon dxf">DXF</div>
+            <div class="item-info">
+              <div class="item-name">25214_本体01.dxf</div>
+              <div class="item-sub">本体ベース ・ 124KB</div>
+            </div>
+          </div>
+          <div class="item-row" onclick="location.href='dxf.html'">
+            <div class="item-icon dxf">DXF</div>
+            <div class="item-info">
+              <div class="item-name">25214_本体02.dxf</div>
+              <div class="item-sub">本体カバー ・ 98KB</div>
+            </div>
+          </div>
+          <div class="item-row" onclick="location.href='dxf.html'">
+            <div class="item-icon dxf">DXF</div>
+            <div class="item-info">
+              <div class="item-name">25214_昇降ガイド_L.dxf</div>
+              <div class="item-sub">昇降ガイド (左) ・ 76KB</div>
+            </div>
+          </div>
+          <div class="item-row" onclick="location.href='dxf.html'">
+            <div class="item-icon dxf">DXF</div>
+            <div class="item-info">
+              <div class="item-name">25214_昇降ガイド_R.dxf</div>
+              <div class="item-sub">昇降ガイド (右) ・ 76KB</div>
+            </div>
+          </div>
+          <div class="item-row" onclick="location.href='dxf.html'">
+            <div class="item-icon dxf">DXF</div>
+            <div class="item-info">
+              <div class="item-name">25214_旋回モータベース.dxf</div>
+              <div class="item-sub">旋回モータ取付板 ・ 52KB</div>
+            </div>
+          </div>
+          <div class="item-row" onclick="location.href='dxf.html'">
+            <div class="item-icon dxf">DXF</div>
+            <div class="item-info">
+              <div class="item-name">25214_ベースプレート.dxf</div>
+              <div class="item-sub">ベースプレート ・ 182KB</div>
+            </div>
+          </div>
+          <div class="item-row" onclick="location.href='dxf.html'">
+            <div class="item-icon dxf">DXF</div>
+            <div class="item-info">
+              <div class="item-name">25214_側面カバー_F.dxf</div>
+              <div class="item-sub">側面カバー (前) ・ 88KB</div>
+            </div>
+          </div>
+          <div class="item-row" onclick="location.href='dxf.html'">
+            <div class="item-icon dxf">DXF</div>
+            <div class="item-info">
+              <div class="item-name">25214_側面カバー_B.dxf</div>
+              <div class="item-sub">側面カバー (後) ・ 88KB</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="side-section" id="side-links">
+          <div class="item-row">
+            <div class="item-icon xlsx">XLS</div>
+            <div class="item-info">
+              <div class="item-name">25214_部品リスト_v3.xlsx</div>
+              <div class="item-sub">部品リスト ・ 5/22 更新</div>
+            </div>
+            <div class="item-actions">
+              <button class="btn-icon hide-on-touch" title="パスをコピー">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+              <button class="btn-icon hide-on-touch" title="メールで送信" style="color: var(--peach-deep);">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="item-row">
+            <div class="item-icon pdf">PDF</div>
+            <div class="item-info">
+              <div class="item-name">25214_材料取り.pdf</div>
+              <div class="item-sub">材料取り ・ 5/14 更新</div>
+            </div>
+            <div class="item-actions">
+              <button class="btn-icon hide-on-touch" title="パスをコピー">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+              <button class="btn-icon hide-on-touch" title="メールで送信" style="color: var(--peach-deep);">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="item-row">
+            <div class="item-icon pdf">PDF</div>
+            <div class="item-info">
+              <div class="item-name">25214_加工指示.pdf</div>
+              <div class="item-sub">加工指示書 ・ 5/12 更新</div>
+            </div>
+            <div class="item-actions">
+              <button class="btn-icon hide-on-touch" title="パスをコピー">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+              <button class="btn-icon hide-on-touch" title="メールで送信" style="color: var(--peach-deep);">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div style="padding: 12px 14px;" class="hide-on-touch">
+            <button class="btn btn-ghost btn-sm" style="width: 100%;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              リンクを追加
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 下部の進捗ストリップ -->
+  <div class="progress-strip">
+    <span class="axis-name-pill">全体図</span>
+    <span class="pct">60%</span>
+    <span class="now-text">⑥ 材料チェック 進行中</span>
+    <button class="btn btn-ghost btn-sm history-btn" onclick="openModal('history-modal')">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      履歴
+    </button>
+  </div>
+
+</div>
+
+
+<!-- 軸追加モーダル -->
+<div class="overlay" id="axis-add-modal" style="display:none;" onclick="if(event.target===this) closeModal('axis-add-modal')">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">軸を追加</div>
+        <div class="modal-sub">25214 コマツ金沢</div>
+      </div>
+      <button class="close-btn" onclick="closeModal('axis-add-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">軸名 <span class="req">*</span></label>
+        <input type="text" class="form-input" placeholder="例: 昇降軸" autofocus />
+      </div>
+      <div class="form-group">
+        <label class="form-label">サジェスト</label>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <span class="chip">全体図</span>
+          <span class="chip">レイアウト</span>
+          <span class="chip">昇降軸</span>
+          <span class="chip">旋回軸</span>
+          <span class="chip">回転軸</span>
+          <span class="chip">前後軸</span>
+          <span class="chip">走行軸</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('axis-add-modal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="closeModal('axis-add-modal'); showToast('軸を追加しました');">追加</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- 履歴モーダル -->
+<div class="overlay" id="history-modal" style="display:none;" onclick="if(event.target===this) closeModal('history-modal')">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">出図・差し替え履歴</div>
+        <div class="modal-sub">25214 — 時系列で全件</div>
+      </div>
+      <button class="close-btn" onclick="closeModal('history-modal')">✕</button>
+    </div>
+    <div class="modal-body" style="padding: 0;">
+      <div class="hist-item">
+        <div class="hist-date"><div class="hist-md">5/23</div><div class="hist-hm">10:30</div></div>
+        <div class="hist-tag honey">差替</div>
+        <div style="flex:1;">
+          <div style="font-weight:700;">昇降軸 PDFを差し替え (Rev.A → Rev.B)</div>
+          <div class="text-subtle" style="font-size:12px; margin-top:3px;">山田 ・ ボルト位置を修正 (M8 → M10)</div>
+        </div>
+      </div>
+      <div class="hist-item">
+        <div class="hist-date"><div class="hist-md">5/20</div><div class="hist-hm">14:00</div></div>
+        <div class="hist-tag brand">出図</div>
+        <div style="flex:1;">
+          <div style="font-weight:700;">旋回軸 初回出図</div>
+          <div class="text-subtle" style="font-size:12px; margin-top:3px;">山田</div>
+        </div>
+      </div>
+      <div class="hist-item">
+        <div class="hist-date"><div class="hist-md">5/15</div><div class="hist-hm">09:45</div></div>
+        <div class="hist-tag brand">出図</div>
+        <div style="flex:1;">
+          <div style="font-weight:700;">全体図・昇降軸 初回出図</div>
+          <div class="text-subtle" style="font-size:12px; margin-top:3px;">山田</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('history-modal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.hist-item {
+  display: grid;
+  grid-template-columns: 56px 60px 1fr;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--steel-100);
+}
+.hist-item:last-child { border-bottom: 0; }
+.hist-date { text-align: center; }
+.hist-md { font-weight: 800; font-size: 15px; font-family: 'JetBrains Mono', monospace; color: var(--brand-950); }
+.hist-hm { font-size: 10px; color: var(--steel-500); font-family: 'JetBrains Mono', monospace; }
+.hist-tag {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+.hist-tag.brand { background: var(--brand-100); color: var(--brand-800); border: 1px solid var(--brand-300); }
+.hist-tag.honey { background: var(--honey-1); color: var(--honey-deep); border: 1px solid var(--honey-2); }
+</style>
+
+
+<!-- PDF差し替えモーダル -->
+<div class="overlay" id="pdf-replace-modal" style="display:none;" onclick="if(event.target===this) closeModal('pdf-replace-modal')">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">PDFを差し替え</div>
+        <div class="modal-sub">25214 / 全体図 — 新PDFをアップロードして差し替え</div>
+      </div>
+      <button class="close-btn" onclick="closeModal('pdf-replace-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">新しいPDF <span class="req">*</span></label>
+        <div class="upload-zone">
+          <div class="upload-icon">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <div class="upload-title">PCからファイルをアップロード</div>
+          <div class="upload-sub">ドロップするか、下のボタンから選択</div>
+          <button class="btn btn-primary" style="margin-top: 6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            ファイルを選択
+          </button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">差し替え理由 <span class="req">*</span></label>
+        <textarea class="form-textarea" rows="2" placeholder="例: ボルト位置を修正"></textarea>
+      </div>
+      <div style="background: var(--honey-1); border: 1px solid var(--honey-2); border-radius: var(--radius); padding: 11px 14px; display: flex; align-items: center; gap: 10px;">
+        <input type="checkbox" id="replace-mail" checked style="accent-color: var(--honey-deep); width:16px; height:16px;" />
+        <label for="replace-mail" style="flex:1; cursor:pointer; color: var(--honey-deep); font-weight: 700; font-size: 12.5px;">
+          差し替え連絡メールを作成する
+        </label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('pdf-replace-modal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="closeModal('pdf-replace-modal'); openModal('mail-modal'); showToast('PDFを差し替えました');">差し替え + メール →</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- メール作成モーダル -->
+<div class="overlay" id="mail-modal" style="display:none;" onclick="if(event.target===this) closeModal('mail-modal')">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">メールを作成</div>
+        <div class="modal-sub">25214 コマツ金沢 / 全体図</div>
+      </div>
+      <button class="close-btn" onclick="closeModal('mail-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">テンプレート</label>
+        <select class="form-select">
+          <option>出図通知（標準）</option>
+          <option>差替連絡</option>
+          <option>納期回答</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">宛先</label>
+        <div class="recipient-chips">
+          <span class="recipient">コマツ金沢 田中様 <button>×</button></span>
+          <button class="add-recipient">＋ 連絡先を選択</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">件名</label>
+        <input type="text" class="form-input" value="【出図通知】25214 コマツ金沢 / 全体図" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">本文</label>
+        <textarea class="form-textarea" rows="8">コマツ金沢
+田中様
+
+下記、出図のお知らせです。
+工番:   25214
+軸:     全体図
+パス:   \\lineworks-sv\Data\設計\drawings\25214\全体図.pdf
+
+よろしくお願いいたします。
+山田</textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('mail-modal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="closeModal('mail-modal'); showToast('Outlookに下書きを作成しました');">下書きを作成</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.recipient-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--steel-300);
+  border-radius: var(--radius);
+  background: white;
+  min-height: 44px;
+  align-items: center;
+}
+.recipient {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--brand-100);
+  color: var(--brand-800);
+  border: 1px solid var(--brand-300);
+  border-radius: var(--radius-sm);
+  padding: 4px 4px 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.recipient button {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: rgba(13, 58, 130, 0.15);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand-800);
+  display: grid; place-items: center;
+}
+.add-recipient {
+  padding: 4px 10px;
+  border: 1px dashed var(--steel-300);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--steel-500);
+  font-weight: 600;
+}
+.add-recipient:hover { color: var(--brand-800); border-color: var(--brand-400); background: var(--brand-50); }
+</style>
+
+
+<!-- ボトムナビ -->
+<nav class="bottom-nav">
+  <a class="bnav-item" href="index.html">
+    <div class="bnav-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </div>
+    <span>一覧</span>
+  </a>
+  <a class="bnav-item active">
+    <div class="bnav-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    </div>
+    <span>詳細</span>
+  </a>
+  <a class="bnav-item" onclick="openModal('history-modal')">
+    <div class="bnav-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </div>
+    <span>履歴</span>
+  </a>
+</nav>
+
+
+<div class="toast-stack" id="toasts"></div>
+<div class="watermark">25214 • detail v2.0</div>
+
+
+<script>
+  function openModal(id) { document.getElementById(id).style.display = 'grid'; }
+  function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+  function togglePane() { document.getElementById('detail-main').classList.toggle('pane-collapsed'); }
+  function switchSide(tabEl, sectionId) {
+    tabEl.parentElement.querySelectorAll('.side-tab').forEach(t => t.classList.remove('active'));
+    tabEl.classList.add('active');
+    document.querySelectorAll('.side-section').forEach(s => s.classList.remove('active'));
+    document.getElementById(sectionId).classList.add('active');
+  }
+
+  document.querySelectorAll('.axis-tab').forEach(tab => {
+    if (tab.querySelector('.axis-badge')) {
+      tab.addEventListener('click', e => {
+        if (e.target.closest('button[onclick]')) return;
+        document.querySelectorAll('.axis-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+      });
+    }
+  });
+
+  function showToast(text) {
+    const stack = document.getElementById('toasts');
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-bright)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg><span>${text}</span><button onclick="this.parentElement.remove()">閉じる</button>`;
+    stack.appendChild(t);
+    setTimeout(() => t.remove(), 3500);
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.overlay').forEach(o => o.style.display = 'none');
+    }
+  });
+</script>
+
+</body>
+</html>

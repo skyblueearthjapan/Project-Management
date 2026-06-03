@@ -1,0 +1,103 @@
+# Project Management v1.0.4 — 社内LAN限定デプロイ用 Docker Compose
+# 仕様書: docs/ARCHITECTURE.md §13
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: Asia/Tokyo
+      PGTZ: Asia/Tokyo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+
+  # Phase A 刈り込み: Meilisearch サービスは削除 (Round 3 合意)
+  # 日程表 + 工番一覧の DB 部分一致で十分なため不要。volume / env だけ保持。
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: project-management/api:latest
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      # Phase A 刈り込み: MEILI_URL / MEILI_MASTER_KEY env は削除 (Meilisearch サービス廃止 — Round 3 合意)
+      FILESERVER_ROOT: ${FILESERVER_ROOT}
+      UPLOAD_DIR: ${UPLOAD_DIR}
+      MASTER_EXCEL_PATH_SHIN_ICHIRAN: ${MASTER_EXCEL_PATH_SHIN_ICHIRAN}
+      MASTER_EXCEL_PATH_NITTEI_HYO_A: ${MASTER_EXCEL_PATH_NITTEI_HYO_A}
+      MASTER_SYNC_INTERVAL_SEC: ${MASTER_SYNC_INTERVAL_SEC:-60}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      LAN_ALLOW_CIDR: ${LAN_ALLOW_CIDR}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DEV_MODE: ${DEV_MODE:-false}                       # ★ true で enforce_lan_only を短絡 (開発)
+      TZ: Asia/Tokyo
+    volumes:
+      # Phase F: SMB は :rw に変更。ただし「新規作成のみ・上書き禁止・削除禁止」を
+      # アプリ層で強制する (CLAUDE.md §2.2 改訂後の方針)。具体的には:
+      #   - 編集後 PDF の保存は backend api/v1/axes.py の save-edited で open(path, "xb") を使い、
+      #     既存ファイルがあれば FileExistsError → 409 で停止 (上書きしない)
+      #   - 既存 fileserver_root 配下の読み取り API (files.serve_fileserver / browse) は今まで通り
+      #   - 削除関数 (rm / unlink / rename) は CLAUDE.md §2.1 で全面禁止 (pre-commit + ruff で強制)
+      #   - 本番では Windows 側 ACL でも二重防御を行う (Modify/Delete/Rename 権限剥奪)
+      - "${FILESERVER_HOST_PATH:-./mnt/fileserver}:/mnt/fileserver:rw"   # ★ SMB 読み書き (Phase F)
+      - "${UPLOADS_HOST_PATH:-./mnt/uploads}:/mnt/uploads:rw"            # ★ v1.0.4 PDF差し替えアップロード書込先
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE: /api
+    image: project-management/web:latest
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-18080}:80"   # 社内LAN HTTP (HTTPS は本番でリバプロ層追加)
+    networks: [internal]
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: Asia/Tokyo
+    volumes:
+      - "${BACKUPS_HOST_PATH:-./backups}:/backups"
+      - "./backend/scripts/backup_entrypoint.sh:/usr/local/bin/backup_entrypoint.sh:ro"
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/usr/local/bin/backup_entrypoint.sh"]
+    networks: [internal]
+
+volumes:
+  pgdata:
+  # Phase A 刈り込み: meili-data volume 宣言は削除 (Meilisearch サービス廃止 — Round 3 合意)
+
+networks:
+  internal:
+    driver: bridge

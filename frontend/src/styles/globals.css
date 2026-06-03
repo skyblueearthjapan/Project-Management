@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --accent: #06b6d4;
+  --ink: #0f172a;
+  --ink2: #334155;
+  --ink3: #64748b;
+  --ink4: #94a3b8;
+  --hair: #e2e8f0;
+  --bg: #f8fafc;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: Inter, "Hiragino Sans", Meiryo, system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Mock v3.0 由来の最小限スタイル */
+.topbar {
+  /* 高さは縮めて画面領域を確保。アイコンとテキストは現サイズ維持。
+     アイコンは Topbar より大きいので 上下に均等にはみ出る。 */
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background: #fff;
+  /* 下枠線は ::after で別途描画 (アイコンが下にはみ出しても線が確実に上に出る) */
+  border-bottom: none;
+  position: relative; /* fallback in case sticky is overridden, but Topbar already uses sticky */
+}
+
+/* Topbar の下枠線。アイコンが下にはみ出しても枠線を消さないため、
+   z-index を高めにして手前に描く。アイコンは Topbar 内の <img> なので
+   この ::after の z-index に対して下に位置する。 */
+.topbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--hair);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* モバイル: Topbar を低くしてビューア領域を確保。横画面でも違和感が出ない高さ。 */
+@media (max-width: 767px) {
+  .topbar {
+    height: 36px;
+    padding: 0 10px;
+  }
+}
+
+.filter-tab {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--ink3);
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.filter-tab[aria-selected="true"] {
+  color: var(--ink);
+  background: #ecfeff;
+  border-color: var(--accent);
+}
+
+.progress-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--hair);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 200ms ease;
+}

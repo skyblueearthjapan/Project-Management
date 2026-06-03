@@ -1,0 +1,24 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.0
+    hooks:
+      - id: ruff
+        args: ["--fix", "--exit-non-zero-on-fix"]
+        files: ^backend/.*\.py$
+      - id: ruff-format
+        files: ^backend/.*\.py$
+
+  - repo: local
+    hooks:
+      - id: no-delete
+        name: 削除系関数の禁止 (CLAUDE.md §2.1)
+        entry: python backend/scripts/check_no_delete.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: no-amend-master-excel
+        name: 工番マスタExcelへの書込禁止
+        entry: bash -c 'if grep -rE "(load_workbook\([^)]*read_only=False)|(\.save\(.*shin_ichiran)|(\.save\(.*nittei_hyo)" backend/ 2>/dev/null; then echo "工番マスタExcelの書込が検出されました"; exit 1; fi'
+        language: system
+        pass_filenames: false

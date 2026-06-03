@@ -1,0 +1,16 @@
+[project]
+name = "pm-outlook-agent"
+version = "0.1.0"
+description = "Project Management - Outlook 送信エージェント (Windows 常駐)"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2.7",
+    "pywin32>=306; platform_system=='Windows'",
+]
+
+[project.optional-dependencies]
+build = [
+    "pyinstaller>=6.10",
+]

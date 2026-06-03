@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+dist/
+.vite/
+*.log
+.eslintcache
+
+# Env / Secrets
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# DB / data
+*.sqlite
+*.db
+pgdata/
+meili-data/
+backups/
+/mnt/
+
+# Build outputs
+backend/dist/
+frontend/dist/
+outlook-agent/dist/
+outlook-agent/build/
+
+# Misc
+# _design_bundle/ と Sampleデータ/ はユーザー指示により追跡 (private repo)
+.omc/
+.claude/
