@@ -50,6 +50,14 @@ frontend/dist/
 outlook-agent/dist/
 outlook-agent/build/
 
+# shutsuzu-agent (PyInstaller) ビルド成果物
+tools/shutsuzu-agent/.venv/
+tools/shutsuzu-agent/build/
+tools/shutsuzu-agent/dist/
+tools/shutsuzu-agent/*.spec
+tools/shutsuzu-agent/送付先一覧.xlsx
+tools/shutsuzu-agent/config.toml
+
 # Misc
 # _design_bundle/ と Sampleデータ/ はユーザー指示により追跡 (private repo)
 .omc/

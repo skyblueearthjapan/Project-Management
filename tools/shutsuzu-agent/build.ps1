@@ -12,7 +12,9 @@
 $ErrorActionPreference = "Stop"
 
 $Name = "出図お知らせDOVE"
-$Entry = "shutsuzu_agent\main.py"
+# エントリはパッケージ外のランチャー (run_app.py)。
+# パッケージ内 main.py を直接エントリにすると相対インポートが __main__ 実行で失敗するため。
+$Entry = "run_app.py"
 
 Write-Host "PyInstaller でビルドします: $Name"
 
