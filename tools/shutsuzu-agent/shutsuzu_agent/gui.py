@@ -19,6 +19,8 @@ from . import mailer
 from .dove_client import DoveClient
 from .kouban import extract_kouban_from_filename, kubun_for_role, to_job_id
 from .mailer import SENDER
+from .master import load_master
+from .master import lookup as lookup_master
 from .members import (
     ROLE_LW,
     ROLE_SHIJI,
@@ -125,6 +127,8 @@ class App(tk.Tk):
         self.instruction_unc = ""
         self.shiji_unc_path = ""
         self.master_cache: dict[str, Any] | None = None
+        # 工番マスタ Excel（新一覧/日程表A）の遅延ロードキャッシュ。
+        self._master_data: dict[str, dict[str, str]] | None = None
         # 送信前に1回だけ構築する register payload。sent_at を固定し、
         # DOVE登録失敗時に「メール再送なし」で再試行するために保持する。
         self._pending_payload: dict[str, Any] | None = None
@@ -405,6 +409,19 @@ class App(tk.Tk):
         return job_id, kubun_for_role(self.current_role)
 
     def _fetch_master(self, job_id: str) -> dict[str, Any] | None:
+        # 1) 工番マスタ Excel（新一覧/日程表A・ファイルサーバ固定パス）= 元アプリと同方式。
+        try:
+            if self._master_data is None:
+                self._master_data = load_master(
+                    str(self.config_data.get("master_nittei_path") or ""),
+                    str(self.config_data.get("master_shin_ichiran_path") or ""),
+                )
+            hit = lookup_master(self._master_data, job_id)
+            if hit:
+                return hit
+        except Exception as e:  # noqa: BLE001 - Excel不可は DOVE 照会へフォールバック
+            self.var_status.set(f"工番マスタExcel読込に失敗（DOVE照会へ）: {e}")
+        # 2) フォールバック: DOVE API（Excel未ヒット or 読込失敗時）。
         try:
             return self.dove.search_master(job_id)
         except Exception as e:  # noqa: BLE001 - 照会失敗はフォールバックで継続

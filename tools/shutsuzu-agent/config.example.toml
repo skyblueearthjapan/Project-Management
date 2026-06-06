@@ -12,5 +12,12 @@ fileserver_unc_root = "\\\\lineworks-sv\\Data"
 # 送付先一覧 Excel のファイル名（EXE と同じフォルダ）
 member_xlsx = "送付先一覧.xlsx"
 
+# 工番マスタ Excel（新一覧 / 日程表A）。社内全体で使う共有マスタのため、
+# EXE フォルダには置かず、ファイルサーバ上の固定パスを参照する（元アプリと同方式）。
+# 工番→納入先/品名 の解決に使用。日程表A を優先し、無い工番は新一覧で補完する。
+# （取得失敗時のみ DOVE API へフォールバックする）
+master_nittei_path = "\\\\lineworks-sv\\Data\\総務部\\社内\\日程表\\日程表A.xlsx"
+master_shin_ichiran_path = "\\\\lineworks-sv\\Data\\総務部\\社内\\日程表\\新一覧.xlsm"
+
 # DOVE API 呼び出しのタイムアウト秒
 request_timeout_sec = 15

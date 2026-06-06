@@ -22,6 +22,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "fileserver_unc_root": "\\\\lineworks-sv\\Data",
     "member_xlsx": "送付先一覧.xlsx",
     "request_timeout_sec": 15,
+    # 工番マスタ Excel（社内共有・ファイルサーバ固定パス。EXE フォルダには置かない）。
+    # 日程表A を優先し、無い工番は新一覧で補完する（元アプリと同方式）。
+    "master_nittei_path": "\\\\lineworks-sv\\Data\\総務部\\社内\\日程表\\日程表A.xlsx",
+    "master_shin_ichiran_path": "\\\\lineworks-sv\\Data\\総務部\\社内\\日程表\\新一覧.xlsm",
 }
 
 
