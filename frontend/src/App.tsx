@@ -13,6 +13,9 @@ export default function App() {
   const loc = useLocation();
   // 詳細画面 / DXF ページは画面いっぱいに広げる
   const isDetail = loc.pathname.startsWith("/jobs/");
+  // 工番一覧 (トップ) は、検索 / 新規工番までを固定し、図面一覧のデータ部だけを
+  // スクロールさせる。そのため main を高さ拘束した flex-col にして内部スクロールを成立させる。
+  const isHome = loc.pathname === "/";
   return (
     // DXF / 詳細画面では子の `flex-1` チェインが下まで正しく伸びる必要があるため、
     // root を `h-full`(=100%) に固定する。`min-h-full` だとビューポート高が確定せず、
@@ -23,6 +26,8 @@ export default function App() {
         className={
           isDetail
             ? "flex-1 w-full flex flex-col min-h-0"
+            : isHome
+            ? "flex-1 min-h-0 max-w-[1280px] mx-auto w-full px-4 flex flex-col"
             : "flex-1 max-w-[1280px] mx-auto w-full px-4 py-6"
         }
       >

@@ -202,77 +202,85 @@ export function JobsListPage() {
   const showingCount = useMemo(() => data?.items.length ?? 0, [data]);
 
   return (
-    <div className="space-y-4">
-      {/* ページタイトル + 件数 */}
-      <div className="flex items-baseline gap-3">
-        <h1 className="text-lg font-semibold">工番</h1>
-        <div className="text-xs text-ink3">{data ? `${data.total}件` : "..."}</div>
-      </div>
-
-      {/* 検索 + 並び順 + 新規 */}
-      <div className="flex flex-wrap items-center gap-3">
-        <input
-          type="search"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="工番 / 件名 / 客先で検索"
-          className="border border-hair rounded-md px-3 py-1.5 text-sm w-64 focus:outline-none focus:border-accent"
-        />
-        <div className="flex items-center gap-2 text-xs text-ink3">
-          <span>並び順</span>
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as UiSort)}
-            className="border border-hair rounded-md px-2 py-1 text-sm bg-white"
-          >
-            <option value="due">納期</option>
-            <option value="id">工番</option>
-          </select>
+    // トップ画面: 上部 (タイトル / 検索 / 並び順 / 新規工番) を固定し、
+    // 図面一覧のデータ部分 (下のスクロール領域) だけを縦スクロールさせる。
+    <div className="flex-1 min-h-0 flex flex-col">
+      {/* ── 固定領域 (スクロールしない) ───────────────────────── */}
+      <div className="shrink-0 pt-6 pb-3 space-y-3">
+        {/* ページタイトル + 件数 */}
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-lg font-semibold">工番</h1>
+          <div className="text-xs text-ink3">{data ? `${data.total}件` : "..."}</div>
         </div>
-        <button
-          onClick={() => setNewOpen(true)}
-          className="ml-auto px-3 py-1.5 rounded-md bg-accent text-white text-sm hover:bg-cyan-600"
-        >
-          + 新規工番
-        </button>
+
+        {/* 検索 + 並び順 + 新規工番 */}
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="工番 / 件名 / 客先で検索"
+            className="border border-hair rounded-md px-3 py-1.5 text-sm w-64 focus:outline-none focus:border-accent"
+          />
+          <div className="flex items-center gap-2 text-xs text-ink3">
+            <span>並び順</span>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as UiSort)}
+              className="border border-hair rounded-md px-2 py-1 text-sm bg-white"
+            >
+              <option value="due">納期</option>
+              <option value="id">工番</option>
+            </select>
+          </div>
+          <button
+            onClick={() => setNewOpen(true)}
+            className="ml-auto px-3 py-1.5 rounded-md bg-accent text-white text-sm hover:bg-cyan-600"
+          >
+            + 新規工番
+          </button>
+        </div>
       </div>
 
       <NewJobModal open={newOpen} onClose={() => setNewOpen(false)} />
 
-      {isLoading && <p className="text-ink3 text-sm">読み込み中…</p>}
-      {error && <p className="text-red-600 text-sm">エラー: {(error as Error).message}</p>}
+      {/* ── スクロール領域 (図面一覧のデータ部のみ縦スクロール) ──── */}
+      <div className="flex-1 min-h-0 overflow-y-auto pb-6">
+        {isLoading && <p className="text-ink3 text-sm">読み込み中…</p>}
+        {error && <p className="text-red-600 text-sm">エラー: {(error as Error).message}</p>}
 
-      {data && data.items.length === 0 && (
-        <div className="text-ink3 text-sm space-y-2">
-          <p>該当する工番がありません。</p>
-          {q && (
-            <button
-              onClick={() => setQ("")}
-              className="text-accent text-xs hover:underline"
+        {data && data.items.length === 0 && (
+          <div className="text-ink3 text-sm space-y-2">
+            <p>該当する工番がありません。</p>
+            {q && (
+              <button
+                onClick={() => setQ("")}
+                className="text-accent text-xs hover:underline"
+              >
+                検索をクリア
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="grid gap-3">
+          {data?.items.map((job) => (
+            <article
+              key={job.id}
+              onClick={() => navigate(`/jobs/${encodeURIComponent(job.id)}`)}
+              className="bg-white border border-hair rounded-md p-3 hover:border-accent transition cursor-pointer flex gap-3"
             >
-              検索をクリア
-            </button>
-          )}
+              <JobRowBody job={job} />
+            </article>
+          ))}
         </div>
-      )}
 
-      <div className="grid gap-3">
-        {data?.items.map((job) => (
-          <article
-            key={job.id}
-            onClick={() => navigate(`/jobs/${encodeURIComponent(job.id)}`)}
-            className="bg-white border border-hair rounded-md p-3 hover:border-accent transition cursor-pointer flex gap-3"
-          >
-            <JobRowBody job={job} />
-          </article>
-        ))}
+        {data && data.total > showingCount && (
+          <p className="text-xs text-ink4 text-center mt-3">
+            {showingCount} / {data.total} 件表示中
+          </p>
+        )}
       </div>
-
-      {data && data.total > showingCount && (
-        <p className="text-xs text-ink4 text-center">
-          {showingCount} / {data.total} 件表示中
-        </p>
-      )}
     </div>
   );
 }

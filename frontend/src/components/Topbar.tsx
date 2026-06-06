@@ -1,5 +1,9 @@
 import { Link, useLocation } from "react-router-dom";
 
+// 社内ポータル (Google Apps Script) — 在庫管理 / 残業・休日出勤申請アプリと同一の遷移先
+const PORTAL_URL =
+  "https://script.google.com/a/macros/lineworks-local.info/s/AKfycbx2eyJMOYP9o--GPBuhY-pj071IIR6Kqb_0xALwwNzdLQZux0dIAlL3P9EoCucnzXA/exec";
+
 export function Topbar() {
   const loc = useLocation();
   const isAdmin = loc.pathname.startsWith("/admin");
@@ -62,6 +66,32 @@ export function Topbar() {
         >
           管理
         </Link>
+        {/* 社内ポータルへ移動 (在庫管理アプリと同一仕様の緑ピル・外部リンク) */}
+        <a
+          href={PORTAL_URL}
+          target="_top"
+          title="社内ポータルへ移動"
+          aria-label="社内ポータルへ移動"
+          className="ml-1 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs md:text-sm font-medium text-white bg-[#1f9d55] hover:bg-[#177a43] transition"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+          <span className="hidden sm:inline">社内ポータルへ移動</span>
+          <span className="sm:hidden">ポータル</span>
+        </a>
       </nav>
     </header>
   );
