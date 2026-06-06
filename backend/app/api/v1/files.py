@@ -28,6 +28,7 @@ from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.security import resolve_under
 from app.models.dxf import DxfFile
+from app.models.job_instruction import JobInstruction
 from app.models.version import Version
 from app.services.audit import client_actor, write_action_log
 
@@ -341,6 +342,39 @@ async def serve_dxf_file(dxf_id: int, db: AsyncSession = Depends(get_db)) -> Fil
     )
 
 
+@router.get("/job-instruction/{instruction_id}")
+async def serve_job_instruction(
+    instruction_id: int, db: AsyncSession = Depends(get_db)
+) -> FileResponse:
+    """job_instructions の id から工番別指示書 PDF を inline で返す。
+
+    指示書は `部署間共通/工番別指示書/…` のように job_id をパスに含まないため、
+    `/files/fileserver` の job_id スコープガードでは配信できない。そこで PDF と同様の
+    DB-id 解決型エンドポイントを設ける (DESIGN §2.3)。
+
+    `deleted_at` が立っている行 (ソフトデリート済) は 404。実体は触らない。
+    """
+    settings = get_settings()
+    instruction = await db.get(JobInstruction, instruction_id)
+    if instruction is None or instruction.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="工番別指示書が見つかりません"
+        )
+    rel = instruction.file_path.lstrip("/")
+    # Path Traversal 最終防御: fileserver_root 配下を強制 (..  / 絶対 / ドライブ文字は 400)。
+    full = resolve_under(settings.fileserver_root, rel)
+    if not full.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="PDFファイルが見つかりません"
+        )
+    mime, _ = mimetypes.guess_type(str(full))
+    return FileResponse(
+        full,
+        media_type=mime or "application/pdf",
+        headers=_inline_disposition(full),
+    )
+
+
 @router.get("/pdf")
 async def serve_pdf(
     path: str = Query(min_length=1, description="versions.pdf_path の値"),
@@ -375,8 +409,20 @@ async def serve_pdf(
 # ezdxf でパースして JSON 化し、フロントは SVG で直描画する方式に転換。
 
 _DXF_SUPPORTED_TYPES = {
-    "LINE", "CIRCLE", "ARC", "LWPOLYLINE", "POLYLINE", "ELLIPSE", "SPLINE",
-    "TEXT", "MTEXT", "INSERT", "DIMENSION", "LEADER", "POINT", "SOLID",
+    "LINE",
+    "CIRCLE",
+    "ARC",
+    "LWPOLYLINE",
+    "POLYLINE",
+    "ELLIPSE",
+    "SPLINE",
+    "TEXT",
+    "MTEXT",
+    "INSERT",
+    "DIMENSION",
+    "LEADER",
+    "POINT",
+    "SOLID",
 }
 
 
@@ -461,7 +507,14 @@ def _dxf_geom_for(e: Any) -> dict[str, Any]:
             }
         if t == "DIMENSION":
             anchors: list[list[float]] = []
-            for a in ("defpoint", "defpoint2", "defpoint3", "defpoint4", "defpoint5", "text_midpoint"):
+            for a in (
+                "defpoint",
+                "defpoint2",
+                "defpoint3",
+                "defpoint4",
+                "defpoint5",
+                "text_midpoint",
+            ):
                 pt = getattr(e.dxf, a, None)
                 if pt is not None:
                     anchors.append([float(pt.x), float(pt.y)])
@@ -530,14 +583,16 @@ def _dxf_parse_to_json(full_path: Path) -> dict[str, Any]:
         geom = _dxf_geom_for(e)
         is_anno = e.dxftype() in _ANNO_BASE
         if geom or e.dxftype() in ("DIMENSION", "INSERT", "LEADER"):
-            entities.append({
-                "id": eid,
-                "type": e.dxftype(),
-                "color": int(getattr(e.dxf, "color", 256) or 256),
-                "layer": str(getattr(e.dxf, "layer", "0")),
-                "geom": geom,
-                "is_annotation": is_anno,
-            })
+            entities.append(
+                {
+                    "id": eid,
+                    "type": e.dxftype(),
+                    "color": int(getattr(e.dxf, "color", 256) or 256),
+                    "layer": str(getattr(e.dxf, "layer", "0")),
+                    "geom": geom,
+                    "is_annotation": is_anno,
+                }
+            )
         if e.dxftype() in ("DIMENSION", "INSERT", "LEADER"):
             # 仮想子が注釈か否か。DIMENSION/LEADER 由来は寸法/引出の構成要素 = 注釈。
             # INSERT 由来は実部品 (ボルト / 穴ブロック等) を含み得るので非注釈扱い。
@@ -552,14 +607,16 @@ def _dxf_parse_to_json(full_path: Path) -> dict[str, Any]:
                         continue
                     veid = f"v{virt_counter:05d}_{eid}"
                     virt_counter += 1
-                    entities.append({
-                        "id": veid,
-                        "type": vt,
-                        "color": int(getattr(ve.dxf, "color", 256) or 256),
-                        "layer": str(getattr(ve.dxf, "layer", "0")),
-                        "geom": vgeom,
-                        "is_annotation": children_are_anno,
-                    })
+                    entities.append(
+                        {
+                            "id": veid,
+                            "type": vt,
+                            "color": int(getattr(ve.dxf, "color", 256) or 256),
+                            "layer": str(getattr(ve.dxf, "layer", "0")),
+                            "geom": vgeom,
+                            "is_annotation": children_are_anno,
+                        }
+                    )
             except Exception as exc:  # noqa: BLE001
                 log.debug("virtual_entities expansion failed: %s", exc)
 
@@ -620,12 +677,14 @@ def _dxf_parse_to_json(full_path: Path) -> dict[str, Any]:
                 rgb = f"#{r:02x}{g:02x}{b:02x}"
             except Exception:  # noqa: BLE001
                 rgb = None
-        layers.append({
-            "name": str(layer.dxf.name),
-            "color": aci,
-            "rgb": rgb,
-            "visible": not bool(getattr(layer.dxf, "off", False)),
-        })
+        layers.append(
+            {
+                "name": str(layer.dxf.name),
+                "color": aci,
+                "rgb": rgb,
+                "visible": not bool(getattr(layer.dxf, "off", False)),
+            }
+        )
 
     # ユニット。日本の機械業界では $INSUNITS=0 (未指定) も実体は mm なので、
     # 産業上の常識として mm をデフォルトにする (誤表示防止)。

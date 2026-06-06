@@ -1,0 +1,16 @@
+# 出図のお知らせ × DOVE連携 エージェント 設定例
+# このファイルを config.toml にコピー（手動: コピー/上書き/リネームはアプリでは行わない）し、
+# 環境に合わせて値を変更してください。EXE と同じフォルダに置きます。
+
+# DOVE バックエンドの API ベースURL（社内LAN内）
+dove_base_url = "http://dove/api/v1"
+
+# ファイルサーバの UNC ルート。EXE で選択した UNC パスから、
+# このプレフィックスを除去して fileserver 相対 posix パスに変換して DOVE へ送る。
+fileserver_unc_root = "\\\\lineworks-sv\\Data"
+
+# 送付先一覧 Excel のファイル名（EXE と同じフォルダ）
+member_xlsx = "送付先一覧.xlsx"
+
+# DOVE API 呼び出しのタイムアウト秒
+request_timeout_sec = 15

@@ -18,6 +18,7 @@ from app.models.axis_phase_stamp import AxisPhaseStamp
 from app.models.contact import Contact
 from app.models.dxf import DxfFile
 from app.models.job import Job
+from app.models.job_instruction import JobInstruction
 from app.models.job_master import JobMasterCache
 from app.models.job_phase_stamp import JobPhaseStamp
 from app.models.mail import MailLog, MailLogRecipient, MailTemplate
@@ -37,6 +38,7 @@ __all__ = [
     "DxfFile",
     "InventoryAttachment",
     "Job",
+    "JobInstruction",
     "JobMasterCache",
     "JobPhaseStamp",
     "LinkCheckResult",

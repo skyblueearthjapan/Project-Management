@@ -13,6 +13,7 @@ from app.api.v1 import (
     link_check,
     pdf_rotations,
     progress,
+    shutsuzu,
     workers,
 )
 from app.core.security import enforce_lan_only
@@ -32,6 +33,8 @@ api_router.include_router(attachments.router, prefix="/jobs", tags=["attachments
 api_router.include_router(dxf.router, prefix="/jobs", tags=["dxf"])
 api_router.include_router(progress.router, prefix="/progress", tags=["progress"])
 api_router.include_router(files.router, prefix="/files", tags=["files"])
+# 出図のお知らせ × DOVE連携: 合成登録 + 工番別指示書 (Job単位) CRUD
+api_router.include_router(shutsuzu.router, prefix="/shutsuzu", tags=["shutsuzu"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 # Phase D: 軸限定の即時リンクチェック (フロント「再チェック」ボタン用)
 api_router.include_router(link_check.router, prefix="/link-check", tags=["link-check"])

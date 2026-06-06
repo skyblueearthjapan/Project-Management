@@ -24,6 +24,7 @@ import { Modal } from "../components/Modal";
 import { RelatedDocsView } from "../components/views/RelatedDocsView";
 import { ReplacementsView } from "../components/views/ReplacementsView";
 import { PartsListView } from "../components/views/PartsListView";
+import { KobanInstructionView } from "../components/views/KobanInstructionView";
 
 // Phase G: PdfViewer は重い (pdf-lib + pdfjs-dist で 1MB+) ため初期バンドルから除外。
 // タブレット回線 / メモリ制約への配慮 + JobDetailPage 以外では使わない依存なので
@@ -32,9 +33,12 @@ const PdfViewer = lazy(() =>
   import("../components/PdfViewer").then((m) => ({ default: m.PdfViewer })),
 );
 
-type ActiveTab = null | "related" | "replacements" | "parts";
+// 出図お知らせ×DOVE連携 (WS-B): "instruction" を追加。
+// 工番別指示書は Job 単位 (軸非依存) のため activeAxisId に依存しない (契約 §3.1)。
+type ActiveTab = null | "instruction" | "related" | "replacements" | "parts";
 
 const TAB_LABELS: Record<Exclude<ActiveTab, null>, string> = {
+  instruction: "工番別指示書",
   related: "関連資料",
   replacements: "差替図面",
   parts: "部品リスト",
@@ -221,6 +225,15 @@ export function JobDetailPage() {
           {/* 管理系タブ (関連資料 / 差替図面 / 部品リスト):
               PC のみ表示。モバイルはビューア専用にして画面領域を広く取るため非表示。 */}
           <span className="ml-auto hidden md:flex items-center gap-1 flex-wrap">
+            {/* 工番別指示書: Job 単位 (軸非依存) のため最前に配置。未出図でも表示する (契約 §3.1)。 */}
+            <button
+              type="button"
+              onClick={() => toggleTab("instruction")}
+              aria-pressed={activeTab === "instruction"}
+              className={tabButtonClass("instruction")}
+            >
+              工番別指示書
+            </button>
             <button
               type="button"
               onClick={() => toggleTab("related")}
@@ -339,9 +352,13 @@ export function JobDetailPage() {
                   - Modal は背景クリック / Esc で閉じる (Modal コンポーネント側で実装済)
                   - 高さは Modal 内に min-h-[60vh] で確保し、内部スクロールに任せる */}
               <Modal
-                open={!!activeTab && !pdfFullscreen}
+                open={!!activeTab && activeTab !== "instruction" && !pdfFullscreen}
                 onClose={() => setActiveTab(null)}
-                title={activeTab ? TAB_LABELS[activeTab] : ""}
+                title={
+                  activeTab && activeTab !== "instruction"
+                    ? TAB_LABELS[activeTab]
+                    : ""
+                }
                 width="960px"
               >
                 <div className="h-[60vh] min-h-[420px] flex flex-col">
@@ -449,6 +466,19 @@ export function JobDetailPage() {
         jobId={job.id}
         nextSortOrder={(job.axes[job.axes.length - 1]?.sort_order ?? 0) + 1}
       />
+
+      {/* 工番別指示書 Modal: Job 単位 (軸非依存) のため axis && ブロックの外に置く。
+          未出図・軸未登録の Job でも開ける (契約 §3.1)。 */}
+      <Modal
+        open={activeTab === "instruction" && !pdfFullscreen}
+        onClose={() => setActiveTab(null)}
+        title={TAB_LABELS.instruction}
+        width="960px"
+      >
+        <div className="h-[60vh] min-h-[420px] flex flex-col">
+          <KobanInstructionView jobId={job.id} />
+        </div>
+      </Modal>
     </div>
   );
 }
