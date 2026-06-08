@@ -20,7 +20,9 @@ def extract_kouban_from_filename(filename: str) -> tuple[str | None, str | None]
         "LW25146-1 昇降軸.pdf" -> ("LW", "25146")
     読み取れなければ (None, None)。
     """
-    base = os.path.splitext(filename)[0]
+    base = os.path.splitext(filename)[0].strip()
+    # 先頭の「工番」表記（例: "工番LW25146-2 …"）を取り除いてから照合する。
+    base = re.sub(r"^工番[\s　]*", "", base)
 
     # TS/EM/NB/AL 等のプレフィックス付き
     m = re.match(r"(TS|EM|NB|AL)\s*(\d+)", base, re.IGNORECASE)
@@ -49,7 +51,9 @@ def extract_master_key_from_filename(filename: str) -> str | None:
         "TS26007 図面集.pdf"               -> "TS26007"
         "LW25150.pdf"                      -> "25150"
     """
-    base = os.path.splitext(filename)[0]
+    base = os.path.splitext(filename)[0].strip()
+    # 先頭の「工番」表記（例: "工番LW25146-2 …"）を取り除いてから照合する。
+    base = re.sub(r"^工番[\s　]*", "", base)
     m = re.match(r"(TS|EM|NB|AL)\s*(\d+(?:-\d+)?)", base, re.IGNORECASE)
     if m:
         return f"{m.group(1).upper()}{m.group(2)}"
