@@ -31,6 +31,9 @@ SENDER = {
 }
 COMPANY_NAME = "株式会社ラインワークス"
 
+# メール HTML 本文のフォント（游ゴシック）。
+_MAIL_FONT = "'游ゴシック', 'Yu Gothic', sans-serif"
+
 
 def resource_base_dir() -> str:
     """EXE（凍結）なら実行ファイルのフォルダ、開発時はソースのフォルダを返す。"""
@@ -115,13 +118,13 @@ def build_zuzu_html_body(
         f'<a href="file:///{p.replace(chr(92), "/")}">{p}</a>' for p in axis_unc_links
     )
     return (
-        "<html><body style=\"font-family: 'MS Gothic', monospace; font-size: 10.5pt;\">"
+        f'<html><body style="font-family: {_MAIL_FONT}; font-size: 10.5pt;">'
         "<p>関係者各位</p>"
         "<p>お疲れ様です。<br>出図のお知らせです。</p>"
         f"<p>{kouban_line}<br>図面集リンクを↓貼り付けます。<br>{attach_line}</p>"
         f"<p>{link_html}</p>"
         "<p>どうぞよろしくお願いいたします。</p>"
-        f"<pre style=\"font-family: 'MS Gothic', monospace; font-size: 10.5pt;\">"
+        f'<pre style="font-family: {_MAIL_FONT}; font-size: 10.5pt;">'
         f"{build_signature()}</pre>"
         "</body></html>"
     )
@@ -196,7 +199,15 @@ def send_outlook_mail(
 
     if attachments:
         for path in attachments:
-            mail.Attachments.Add(Source=path)
+            if not os.path.isfile(path):
+                raise RuntimeError(f"添付ファイルが見つかりません:\n{path}")
+            # 位置引数で渡す。Source= キーワード渡しは pywin32 の版差で
+            # 例外なく無添付になることがあるため避ける。
+            mail.Attachments.Add(path)
+        if int(mail.Attachments.Count) < len(attachments):
+            raise RuntimeError(
+                "添付ファイルの追加に失敗しました（Outlook に拒否された可能性があります）。"
+            )
 
     if send_immediately:
         mail.Send()
