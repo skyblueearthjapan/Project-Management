@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import re
+import unicodedata
 
 from .members import ROLE_TS
 
@@ -20,7 +21,8 @@ def extract_kouban_from_filename(filename: str) -> tuple[str | None, str | None]
         "LW25146-1 昇降軸.pdf" -> ("LW", "25146")
     読み取れなければ (None, None)。
     """
-    base = os.path.splitext(filename)[0].strip()
+    # 全角英数字・空白を半角へ正規化（例: ２５０００ → 25000, ＬＷ → LW）。
+    base = unicodedata.normalize("NFKC", os.path.splitext(filename)[0]).strip()
     # 先頭の「工番」表記（例: "工番LW25146-2 …"）を取り除いてから照合する。
     base = re.sub(r"^工番[\s　]*", "", base)
 
@@ -51,7 +53,8 @@ def extract_master_key_from_filename(filename: str) -> str | None:
         "TS26007 図面集.pdf"               -> "TS26007"
         "LW25150.pdf"                      -> "25150"
     """
-    base = os.path.splitext(filename)[0].strip()
+    # 全角英数字・空白を半角へ正規化（例: ２５０００ → 25000, ＬＷ → LW）。
+    base = unicodedata.normalize("NFKC", os.path.splitext(filename)[0]).strip()
     # 先頭の「工番」表記（例: "工番LW25146-2 …"）を取り除いてから照合する。
     base = re.sub(r"^工番[\s　]*", "", base)
     m = re.match(r"(TS|EM|NB|AL)\s*(\d+(?:-\d+)?)", base, re.IGNORECASE)
