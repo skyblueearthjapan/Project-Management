@@ -9,7 +9,6 @@ openpyxl は ``read_only`` / ``data_only`` で読むだけ。書込・削除・�
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from typing import Any
 
@@ -72,9 +71,13 @@ def _candidate_keys(job_id: str) -> list[str]:
     keys = [jid]
     if jid.upper().startswith("LW") and jid[2:]:
         keys.append(jid[2:])
-    digits = re.sub(r"\D", "", jid)
-    if digits and digits not in keys:
-        keys.append(digits)
+    # 枝番(-N)付きなら、親工番(枝番なし)もフォールバック候補に加える。
+    # 枝番付きで選ばれても、マスタが親工番のみを保持している場合に拾えるように。
+    # 親→枝番の逆方向は（どの枝番か曖昧なため）行わない。
+    for k in list(keys):
+        parent = k.split("-", 1)[0]
+        if parent and parent != k and parent not in keys:
+            keys.append(parent)
     return keys
 
 
