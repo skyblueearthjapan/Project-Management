@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "./client";
+import { api, ApiError } from "./client";
 
 // 出図お知らせ×DOVE連携 (WS-B): 工番別指示書 (Job単位) の API クライアント。
 // - 既存 attachments.ts は軸単位だが、工番別指示書は Job 単位の新カテゴリ (契約 §3.3)。
@@ -66,11 +66,19 @@ export function useAddJobInstruction() {
 export function useDeleteJobInstruction(jobId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (instructionId: number) =>
-      api<void>(
-        `/v1/shutsuzu/jobs/${encodeURIComponent(jobId ?? "")}/instructions/${instructionId}`,
-        { method: "DELETE" },
-      ),
+    // 冪等化: 二度押し等で「既に削除済み (404)」が返っても成功扱いにする。
+    // ソフトデリートは何度実行しても結果が同じため、404 はエラーにしない。
+    mutationFn: async (instructionId: number) => {
+      try {
+        await api<void>(
+          `/v1/shutsuzu/jobs/${encodeURIComponent(jobId ?? "")}/instructions/${instructionId}`,
+          { method: "DELETE" },
+        );
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return;
+        throw e;
+      }
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["job-instructions", jobId] });
     },

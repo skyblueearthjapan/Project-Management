@@ -209,7 +209,8 @@ export function useDeleteRelatedDoc(jobId: string, axisId: number | undefined) {
         `/api/v1/jobs/${jobId}/axes/${axisId}/related-docs/${docId}`,
         { method: "DELETE" },
       );
-      if (!res.ok) {
+      // 冪等化: 二度押し等で「既に削除済み (404)」は成功扱いにする。
+      if (!res.ok && res.status !== 404) {
         throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       }
     },
@@ -227,7 +228,8 @@ export function useDeletePartsListVersion(jobId: string, axisId: number | undefi
         `/api/v1/jobs/${jobId}/axes/${axisId}/parts-list/versions/${versionId}`,
         { method: "DELETE" },
       );
-      if (!res.ok) {
+      // 冪等化: 二度押し等で「既に削除済み (404)」は成功扱いにする。
+      if (!res.ok && res.status !== 404) {
         throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       }
     },
@@ -245,7 +247,8 @@ export function useDeletePdfReplacement(jobId: string, axisId: number | undefine
         `/api/v1/jobs/${jobId}/axes/${axisId}/pdf-replacements/${repId}`,
         { method: "DELETE" },
       );
-      if (!res.ok) {
+      // 冪等化: 二度押し等で「既に削除済み (404)」は成功扱いにする。
+      if (!res.ok && res.status !== 404) {
         throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       }
     },
