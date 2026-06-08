@@ -11,6 +11,7 @@ import csv
 import datetime
 import os
 import sys
+from typing import Any
 
 from .members import ROLE_TS, Member
 
@@ -66,62 +67,60 @@ def build_zuzu_subject(job_display: str) -> str:
     return f"【出図のお知らせ】工番{job_display}"
 
 
-def build_zuzu_body(
-    role: str,
-    job_display: str,
-    customer: str | None,
-    hinmei: str | None,
-    axis_unc_links: list[str],
-) -> str:
-    """出図のお知らせ 本文（要件 §4.1 テンプレート準拠）。
+def _shutsuzu_line(entry: dict[str, Any]) -> str:
+    """軸 1 件分の「(納品先様向け) (製品名) (軸名称) を出図しました。」を作る。
 
-    出図図面PDF は添付せず、UNC パスを本文にリンクとして列挙する。
+    納品先・製品名が無い場合（マスタ未掲載等）は、ある要素だけで自然な文にする。
     """
-    if customer or hinmei:
-        kouban_line = f"工番{job_display} {customer or ''}様向け {hinmei or ''}".rstrip()
-    else:
-        kouban_line = f"工番{job_display} （日程表に情報なし）"
+    parts: list[str] = []
+    if entry.get("customer"):
+        parts.append(f"{entry['customer']}様向け")
+    if entry.get("hinmei"):
+        parts.append(str(entry["hinmei"]))
+    parts.append(str(entry.get("name") or "(軸名称未入力)"))
+    return " ".join(parts) + " を出図しました。"
 
+
+def build_zuzu_body(role: str, job_display: str, axes: list[dict[str, Any]]) -> str:
+    """出図のお知らせ 本文。軸ごとに「納品先 / 製品名 / 軸名称 を出図しました。」を明記する。
+
+    各 axis = {name, customer, hinmei, link}。出図図面PDF は添付せず UNC をリンク列挙する。
+    """
     attach_line = "図面集を添付します。" if role == ROLE_TS else "工番別指示書を添付します。"
-
     lines = [
         "関係者各位",
         "",
         "お疲れ様です。",
         "出図のお知らせです。",
-        kouban_line,
-        "図面集リンクを↓貼り付けます。",
-        attach_line,
         "",
+        f"工番{job_display}",
     ]
-    lines.extend(axis_unc_links)
+    lines.extend("　" + _shutsuzu_line(ax) for ax in axes)
+    lines.append("")
+    lines.append("図面集リンクを↓貼り付けます。")
+    lines.append(attach_line)
+    lines.append("")
+    lines.extend(str(ax["link"]) for ax in axes if ax.get("link"))
     lines.append("")
     lines.append("どうぞよろしくお願いいたします。")
     return "\r\n".join(lines) + "\r\n" + build_signature()
 
 
-def build_zuzu_html_body(
-    role: str,
-    job_display: str,
-    customer: str | None,
-    hinmei: str | None,
-    axis_unc_links: list[str],
-) -> str:
-    """Outlook 送信用 HTML 本文（UNC リンクをクリック可能にする）。"""
-    if customer or hinmei:
-        kouban_line = f"工番{job_display} {customer or ''}様向け {hinmei or ''}".rstrip()
-    else:
-        kouban_line = f"工番{job_display} （日程表に情報なし）"
+def build_zuzu_html_body(role: str, job_display: str, axes: list[dict[str, Any]]) -> str:
+    """Outlook 送信用 HTML 本文（軸ごとの明記 + UNC リンクをクリック可能にする）。"""
     attach_line = "図面集を添付します。" if role == ROLE_TS else "工番別指示書を添付します。"
-
+    shutsuzu_html = "<br>".join(_shutsuzu_line(ax) for ax in axes)
     link_html = "<br>".join(
-        f'<a href="file:///{p.replace(chr(92), "/")}">{p}</a>' for p in axis_unc_links
+        f'<a href="file:///{str(ax["link"]).replace(chr(92), "/")}">{ax["link"]}</a>'
+        for ax in axes
+        if ax.get("link")
     )
     return (
         f'<html><body style="font-family: {_MAIL_FONT}; font-size: 10.5pt;">'
         "<p>関係者各位</p>"
         "<p>お疲れ様です。<br>出図のお知らせです。</p>"
-        f"<p>{kouban_line}<br>図面集リンクを↓貼り付けます。<br>{attach_line}</p>"
+        f"<p>工番{job_display}<br>{shutsuzu_html}</p>"
+        f"<p>図面集リンクを↓貼り付けます。<br>{attach_line}</p>"
         f"<p>{link_html}</p>"
         "<p>どうぞよろしくお願いいたします。</p>"
         f'<pre style="font-family: {_MAIL_FONT}; font-size: 10.5pt;">'

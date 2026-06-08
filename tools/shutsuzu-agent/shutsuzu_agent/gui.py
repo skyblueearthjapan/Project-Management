@@ -17,7 +17,12 @@ from typing import Any
 
 from . import mailer
 from .dove_client import DoveClient
-from .kouban import extract_kouban_from_filename, kubun_for_role, to_job_id
+from .kouban import (
+    extract_kouban_from_filename,
+    extract_master_key_from_filename,
+    kubun_for_role,
+    to_job_id,
+)
 from .mailer import SENDER
 from .master import load_master
 from .master import lookup as lookup_master
@@ -433,15 +438,11 @@ class App(tk.Tk):
         if resolved is None:
             return
         job_id, _kubun = resolved
-        self.master_cache = self._fetch_master(job_id)
-        customer = (self.master_cache or {}).get("customer")
-        hinmei = (self.master_cache or {}).get("title")
-
-        links = [normalize_unc(ax["pdf_unc"]) for ax in self.axes if ax["pdf_unc"]]
+        axes = self._build_axis_mail_entries()
         subject = mailer.build_zuzu_subject(job_id)
-        body = mailer.build_zuzu_body(self.current_role or "", job_id, customer, hinmei, links)
+        body = mailer.build_zuzu_body(self.current_role or "", job_id, axes)
         self._set_text(self.txt_preview, f"件名: {subject}\n\n{body}")
-        self.var_status.set(f"プレビュー更新: 工番 {job_id} / 軸 {len(links)}件")
+        self.var_status.set(f"プレビュー更新: 工番 {job_id} / 軸 {len(axes)}件")
 
     # ------------------------------------------------------------------
     # 送信 + DOVE登録
@@ -468,6 +469,28 @@ class App(tk.Tk):
                 }
             )
         return out
+
+    def _build_axis_mail_entries(self) -> list[dict[str, Any]]:
+        """本文用: 軸ごとに {name, customer, hinmei, link} を作る。
+
+        納品先/製品名は、その軸の出図PDFファイル名の **枝番**（例 25146-1）で
+        マスタ照会する（マスタは枝番付きで保持しており親工番 25146 では引けない）。
+        """
+        entries: list[dict[str, Any]] = []
+        for ax in self.axes:
+            if not ax["pdf_unc"]:
+                continue
+            mkey = extract_master_key_from_filename(os.path.basename(ax["pdf_unc"]))
+            info = self._fetch_master(mkey) if mkey else None
+            entries.append(
+                {
+                    "name": ax["name_var"].get().strip(),
+                    "customer": (info or {}).get("customer"),
+                    "hinmei": (info or {}).get("title"),
+                    "link": normalize_unc(ax["pdf_unc"]),
+                }
+            )
+        return entries
 
     def _send_zuzu(self, send_immediately: bool) -> None:
         if not self.current_role:
@@ -501,16 +524,18 @@ class App(tk.Tk):
             messagebox.showerror(APP_TITLE, f"パス変換エラー（送信を中止しました）:\n{e}")
             return
 
-        # 工番情報（本文用）
-        master = self.master_cache if self.master_cache is not None else self._fetch_master(job_id)
-        customer = (master or {}).get("customer")
-        hinmei = (master or {}).get("title")
-        delivery_date = (master or {}).get("delivery_date")
+        # 本文用: 軸ごとに（PDFファイル名の枝番で）マスタ照会し、納品先/製品名/軸名称を明記。
+        mail_axes = self._build_axis_mail_entries()
+        # DOVE Job（親工番）の代表 納品先/製品名 は、最初に情報が引けた軸から採る
+        # （親工番はマスタに無く、枝番にしか情報がないため）。
+        first = next((e for e in mail_axes if e.get("customer") or e.get("hinmei")), None)
+        customer = (first or {}).get("customer")
+        hinmei = (first or {}).get("hinmei")
+        delivery_date = None
 
-        links = [normalize_unc(ax["pdf_unc"]) for ax in named]
         subject = mailer.build_zuzu_subject(job_id)
-        body = mailer.build_zuzu_body(self.current_role, job_id, customer, hinmei, links)
-        html_body = mailer.build_zuzu_html_body(self.current_role, job_id, customer, hinmei, links)
+        body = mailer.build_zuzu_body(self.current_role, job_id, mail_axes)
+        html_body = mailer.build_zuzu_html_body(self.current_role, job_id, mail_axes)
         attachments = [self.instruction_unc] if self.instruction_unc else None
 
         if send_immediately:

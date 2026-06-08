@@ -37,6 +37,28 @@ def extract_kouban_from_filename(filename: str) -> tuple[str | None, str | None]
     return None, None
 
 
+def extract_master_key_from_filename(filename: str) -> str | None:
+    """工番マスタ照合キー（**枝番付き**）をファイル名から抽出する。
+
+    マスタ（新一覧 / 日程表A）は工番を枝番付き（例 ``25146-1`` / ``TS26007``）で
+    保持しているため、納品先・製品名の照会にはこのキーを使う（親工番 ``25146`` では
+    引けない）。
+
+    例:
+        "LW25146-1 駆動側ポジショナー.pdf" -> "25146-1"
+        "TS26007 図面集.pdf"               -> "TS26007"
+        "LW25150.pdf"                      -> "25150"
+    """
+    base = os.path.splitext(filename)[0]
+    m = re.match(r"(TS|EM|NB|AL)\s*(\d+(?:-\d+)?)", base, re.IGNORECASE)
+    if m:
+        return f"{m.group(1).upper()}{m.group(2)}"
+    m = re.match(r"(?:LW)?\s*(\d{5}(?:-\d+)?)", base, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    return None
+
+
 def to_job_id(prefix: str, kouban_key: str) -> str:
     """親工番キーを DOVE Job ID（表示形）に整える。
 
