@@ -52,71 +52,89 @@ export function KobanInstructionView({ jobId }: Props) {
           <p className="p-4 text-ink3">工番別指示書はまだありません。</p>
         )}
         <ul className="divide-y divide-hair">
-          {data?.map((d) => {
-            const isSelected = d.id === selectedId;
-            const fileUrl = jobInstructionFileUrl(d.id);
-            return (
-              <li
-                key={d.id}
-                className={`px-4 py-2 cursor-pointer hover:bg-cyan-50 ${
-                  isSelected ? "bg-cyan-50" : ""
-                }`}
-                onClick={() => setSelectedId(isSelected ? null : d.id)}
-              >
-                <div className="flex items-center gap-2">
-                  <span aria-hidden>📄</span>
-                  <span className="font-medium truncate">
-                    {d.original_name ?? fileNameOf(d.file_path)}
-                  </span>
-                  <span className="ml-auto text-xs text-ink3 shrink-0">
-                    {formatDate(d.created_at)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (
-                        window.confirm(
-                          "この工番別指示書を一覧から削除しますか？\n(ファイル実体は残ります、表示のみ非表示になります)",
-                        )
-                      ) {
-                        delInstruction.mutate(d.id);
-                      }
-                    }}
-                    title="一覧から削除 (ファイル実体は保持)"
-                    className="text-xs text-ink3 hover:text-red-600 px-1 shrink-0"
-                    aria-label="削除"
-                  >
-                    🗑️
-                  </button>
-                </div>
-                <div className="text-xs text-ink3 font-mono truncate pl-6">
-                  {d.file_path}
-                </div>
-                {isSelected && (
-                  <div className="mt-2 pl-6 space-y-1 text-xs">
-                    {d.note && (
-                      <div className="text-ink2 whitespace-pre-wrap">{d.note}</div>
-                    )}
-                    <a
-                      href={fileUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-block text-accent hover:underline"
-                    >
-                      指示書PDFを開く →
-                    </a>
-                  </div>
-                )}
-              </li>
-            );
-          })}
+          {data?.map((d) => (
+            <li
+              key={d.id}
+              className="px-4 py-2 cursor-pointer hover:bg-cyan-50"
+              onClick={() => setSelectedId(d.id)}
+              title="クリックで拡大表示"
+            >
+              <div className="flex items-center gap-2">
+                <span aria-hidden>📄</span>
+                <span className="font-medium truncate">
+                  {d.original_name ?? fileNameOf(d.file_path)}
+                </span>
+                <span className="ml-auto text-xs text-ink3 shrink-0">
+                  {formatDate(d.created_at)}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (
+                      window.confirm(
+                        "この工番別指示書を一覧から削除しますか？\n(ファイル実体は残ります、表示のみ非表示になります)",
+                      )
+                    ) {
+                      delInstruction.mutate(d.id);
+                    }
+                  }}
+                  title="一覧から削除 (ファイル実体は保持)"
+                  className="text-xs text-ink3 hover:text-red-600 px-1 shrink-0"
+                  aria-label="削除"
+                >
+                  🗑️
+                </button>
+              </div>
+              <div className="text-xs text-ink3 font-mono truncate pl-6">
+                {d.file_path}
+              </div>
+            </li>
+          ))}
         </ul>
       </div>
 
+      {/* クリックで即・大きなポップアップ(モーダル)に PDF を埋め込み表示する。 */}
       {selected && (
-        <div className="sr-only">selected: {selected.file_path}</div>
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-3"
+          onClick={() => setSelectedId(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="flex h-[94vh] w-[96vw] flex-col overflow-hidden rounded-md bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 border-b border-hair px-4 py-2 shrink-0">
+              <span aria-hidden>📄</span>
+              <span className="font-medium truncate">
+                {selected.original_name ?? fileNameOf(selected.file_path)}
+              </span>
+              <a
+                href={jobInstructionFileUrl(selected.id)}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-auto text-xs text-accent hover:underline shrink-0"
+              >
+                別タブで開く
+              </a>
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                className="px-1 text-lg leading-none text-ink3 hover:text-ink shrink-0"
+                aria-label="閉じる"
+              >
+                ✕
+              </button>
+            </div>
+            <iframe
+              src={jobInstructionFileUrl(selected.id)}
+              title={selected.original_name ?? "工番別指示書"}
+              className="w-full flex-1 border-0"
+            />
+          </div>
+        </div>
       )}
     </div>
   );
