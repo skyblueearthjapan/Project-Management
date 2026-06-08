@@ -5,6 +5,7 @@ import {
   useDeletePdfReplacement,
 } from "../../api/attachments";
 import { LinkModal } from "../LinkModal";
+import { FilePreviewModal, openFile } from "../FilePreviewModal";
 import {
   LinkBrokenBadge,
   RecheckButton,
@@ -41,6 +42,9 @@ export function ReplacementsView({ jobId, axisId, currentVersionId }: Props) {
   const [linkModal, setLinkModal] = useState<"replacement" | "scan-receipt" | null>(null);
   // Phase D Major-4: recheck 結果を 3 秒だけヘッダに toast 表示する。
   const [toast, setToast] = useState<RecheckToastData | null>(null);
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(
+    null,
+  );
 
   const brokenCount = data?.filter((r) => r.is_link_broken).length ?? 0;
 
@@ -140,14 +144,20 @@ export function ReplacementsView({ jobId, axisId, currentVersionId }: Props) {
                   </button>
                 </div>
                 <div className="pl-6 mt-1">
-                  <a
-                    href={fileUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-mono text-accent hover:underline break-all"
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openFile(
+                        fileUrl,
+                        fileNameOf(r.replaced_pdf_path),
+                        setPreview,
+                      )
+                    }
+                    title="クリックで拡大表示"
+                    className="text-xs font-mono text-accent hover:underline break-all text-left"
                   >
                     {fileNameOf(r.replaced_pdf_path)}
-                  </a>
+                  </button>
                   <div className="text-[10px] text-ink3 font-mono break-all">
                     {r.replaced_pdf_path}
                   </div>
@@ -162,6 +172,14 @@ export function ReplacementsView({ jobId, axisId, currentVersionId }: Props) {
           })}
         </ul>
       </div>
+
+      {preview && (
+        <FilePreviewModal
+          url={preview.url}
+          name={preview.name}
+          onClose={() => setPreview(null)}
+        />
+      )}
 
       {linkModal && (
         <LinkModal

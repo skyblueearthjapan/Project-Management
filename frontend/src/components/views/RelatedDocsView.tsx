@@ -13,6 +13,7 @@ import {
   type RelatedDoc,
 } from "../../api/attachments";
 import { LinkModal } from "../LinkModal";
+import { FilePreviewModal, openFile } from "../FilePreviewModal";
 
 // Phase B: 関連資料 View (VIEW-FIRST: コンテンツ一覧が主役、追加は LinkModal で行う)
 // 要件§6.1 (1) — 軸に紐づく関連資料を一覧表示し、行クリックでパス情報を表示する。
@@ -43,6 +44,9 @@ export function RelatedDocsView({ jobId, axisId }: Props) {
   const [linkOpen, setLinkOpen] = useState(false);
   // Phase D Major-4: recheck 結果を 3 秒だけヘッダに toast 表示する。
   const [toast, setToast] = useState<RecheckToastData | null>(null);
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(
+    null,
+  );
 
   const selected: RelatedDoc | undefined = data?.find((d) => d.id === selectedId);
   const brokenCount = data?.filter((d) => d.is_link_broken).length ?? 0;
@@ -138,15 +142,16 @@ export function RelatedDocsView({ jobId, axisId }: Props) {
                     {d.note && (
                       <div className="text-ink2 whitespace-pre-wrap">{d.note}</div>
                     )}
-                    <a
-                      href={fileUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openFile(fileUrl, fileNameOf(d.file_path), setPreview);
+                      }}
                       className="inline-block text-accent hover:underline"
                     >
                       ファイルサーバで開く →
-                    </a>
+                    </button>
                   </div>
                 )}
               </li>
@@ -159,6 +164,14 @@ export function RelatedDocsView({ jobId, axisId }: Props) {
           ここでは note とパスを大きく出すだけに留める。 */}
       {selected && (
         <div className="sr-only">selected: {selected.file_path}</div>
+      )}
+
+      {preview && (
+        <FilePreviewModal
+          url={preview.url}
+          name={preview.name}
+          onClose={() => setPreview(null)}
+        />
       )}
 
       <LinkModal

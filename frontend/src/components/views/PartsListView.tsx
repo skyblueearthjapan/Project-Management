@@ -5,6 +5,7 @@ import {
   useDeletePartsListVersion,
 } from "../../api/attachments";
 import { LinkModal } from "../LinkModal";
+import { FilePreviewModal, openFile, fileBaseName } from "../FilePreviewModal";
 import {
   LinkBrokenBadge,
   RecheckButton,
@@ -37,6 +38,9 @@ export function PartsListView({ jobId, axisId }: Props) {
   const [linkOpen, setLinkOpen] = useState(false);
   // Phase D Major-4: recheck 結果を 3 秒だけヘッダに toast 表示する。
   const [toast, setToast] = useState<RecheckToastData | null>(null);
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(
+    null,
+  );
 
   // versions は API 上 ASC で返るかもしれない。新しい順 (version_no desc) で再ソート。
   const versions = [...(data?.versions ?? [])].sort(
@@ -133,14 +137,16 @@ export function PartsListView({ jobId, axisId }: Props) {
                   </button>
                 </div>
                 <div className="pl-6 mt-1">
-                  <a
-                    href={fileUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-mono text-accent hover:underline break-all"
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openFile(fileUrl, fileBaseName(v.file_path), setPreview)
+                    }
+                    title="クリックで表示 (PDF は拡大ポップアップ / Excel 等は別タブ)"
+                    className="text-xs font-mono text-accent hover:underline break-all text-left"
                   >
                     {v.file_path}
-                  </a>
+                  </button>
                   {v.note && (
                     <div className="text-xs text-ink2 mt-1 whitespace-pre-wrap">
                       {v.note}
@@ -152,6 +158,14 @@ export function PartsListView({ jobId, axisId }: Props) {
           })}
         </ul>
       </div>
+
+      {preview && (
+        <FilePreviewModal
+          url={preview.url}
+          name={preview.name}
+          onClose={() => setPreview(null)}
+        />
+      )}
 
       <LinkModal
         open={linkOpen}
