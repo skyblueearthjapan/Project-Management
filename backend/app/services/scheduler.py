@@ -41,7 +41,6 @@ def build_scheduler() -> AsyncIOScheduler:
         _excel_sync_job,
         "interval",
         seconds=settings.master_sync_interval_sec,
-        next_run_time=None,
         id="excel-sync",
         max_instances=1,
         coalesce=True,
