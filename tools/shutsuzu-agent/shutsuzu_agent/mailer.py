@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import csv
 import datetime
+import html
 import os
+import re
 import sys
 from typing import Any
 
@@ -106,12 +108,23 @@ def build_zuzu_body(role: str, job_display: str, axes: list[dict[str, Any]]) -> 
     return "\r\n".join(lines) + "\r\n" + build_signature()
 
 
+def _unc_to_href(unc: str) -> str:
+    """UNC パスを Outlook 用の ``file:///`` href に変換する。
+
+    バックスラッシュを ``/`` に直し、**半角スペースは ``%20`` にエンコード**する。
+    エンコードしないと Outlook が空白でリンク先を打ち切り、ファイル名に空白を含む
+    パス（例 ``26016 図面集.pdf``）が「見つかりません」になる。日本語等はそのまま
+    残す（現状の運用で問題なく開けているため・URLエンコードするとむしろ崩れる）。
+    """
+    return "file:///" + unc.replace("\\", "/").replace(" ", "%20")
+
+
 def build_zuzu_html_body(role: str, job_display: str, axes: list[dict[str, Any]]) -> str:
     """Outlook 送信用 HTML 本文（軸ごとの明記 + UNC リンクをクリック可能にする）。"""
     attach_line = "図面集を添付します。" if role == ROLE_TS else "工番別指示書を添付します。"
     shutsuzu_html = "<br>".join(_shutsuzu_line(ax) for ax in axes)
     link_html = "<br>".join(
-        f'<a href="file:///{str(ax["link"]).replace(chr(92), "/")}">{ax["link"]}</a>'
+        f'<a href="{_unc_to_href(str(ax["link"]))}">{ax["link"]}</a>'
         for ax in axes
         if ax.get("link")
     )
@@ -126,6 +139,37 @@ def build_zuzu_html_body(role: str, job_display: str, axes: list[dict[str, Any]]
         f'<pre style="font-family: {_MAIL_FONT}; font-size: 10.5pt;">'
         f"{build_signature()}</pre>"
         "</body></html>"
+    )
+
+
+# UNC パス（``\\server\share\...``）を本文テキストから拾う。出図PDFは1行1パスで
+# 列挙されるため、改行・山括弧・クォート以外（=半角スペースを含む）を行末まで取り込む。
+# こうしないとファイル名に空白を含むパス（例 ``26016 図面集.pdf``）が空白で分断される。
+_UNC_RE = re.compile(r"\\\\[^\r\n<>\"]+")
+
+
+def build_html_from_text(text: str) -> str:
+    """編集後のプレーン本文を Outlook 用 HTML に変換する（UNC 行を自動リンク化）。
+
+    UI で本文を編集した場合に使う。改行・字下げは ``<pre>`` で保ち、本文中の
+    UNC パス（``\\\\server\\...``）を ``file:///`` のクリック可能リンクへ変換する。
+    UNC にクォート等の特殊文字は含まれないため、エスケープ後でもそのまま一致する。
+    ファイル名の半角スペースはリンクに含めるが、行末の余分な空白は除外する。
+    """
+    escaped = html.escape(text)
+
+    def _linkify(m: re.Match[str]) -> str:
+        raw = m.group(0)
+        unc = raw.rstrip()  # 行末の余分な空白はリンク対象から外す
+        trailing = raw[len(unc) :]
+        return f'<a href="{_unc_to_href(unc)}">{unc}</a>' + trailing
+
+    linked = _UNC_RE.sub(_linkify, escaped)
+    return (
+        f'<html><body style="font-family: {_MAIL_FONT}; font-size: 10.5pt;">'
+        f'<pre style="font-family: {_MAIL_FONT}; font-size: 10.5pt; '
+        f'white-space: pre-wrap; margin: 0;">'
+        f"{linked}</pre></body></html>"
     )
 
 

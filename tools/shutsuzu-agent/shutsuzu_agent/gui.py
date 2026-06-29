@@ -30,6 +30,7 @@ from .members import (
     ROLE_LW,
     ROLE_SHIJI,
     ROLE_TS,
+    flag_kind,
     get_recipients,
     get_recipients_label,
 )
@@ -40,6 +41,11 @@ APP_TITLE = "出図のお知らせ × DOVE連携 メール送信"
 
 # 工番別指示書 ファイルサーバー初期フォルダ（UNC・参照EXE :34-37）
 SHIJI_SERVER_BASE = os.path.join(os.sep * 2 + "lineworks-sv", "Data", "部署間共通", "工番別指示書")
+
+# 本文プレビュー（編集可）の初期メッセージ。これと一致 or 空欄なら「未編集」とみなす。
+_BODY_PLACEHOLDER = (
+    "（軸を追加し『本文を再生成』を押すと本文が表示されます。ここで直接編集もできます）"
+)
 
 
 class ConfirmDialog(tk.Toplevel):
@@ -111,6 +117,106 @@ class ConfirmDialog(tk.Toplevel):
         self.destroy()
 
 
+class RecipientPickerDialog(tk.Toplevel):
+    """テスト送信の宛先を絞り込むダイアログ（宛先を TO/CC/送らない から選ぶ）。
+
+    初期値は送付先一覧の「テスト送信」列（``test`` フラグ）から設定し、ここで自由に
+    変更できる。``result`` は (to_list, cc_list)。キャンセル時は None。
+    """
+
+    _CHOICES = ("送らない", "TO", "CC")
+    _KIND_TO_CHOICE = {"none": "送らない", "to": "TO", "cc": "CC"}
+
+    def __init__(self, parent: tk.Misc, members: list[MemberT]) -> None:
+        super().__init__(parent)
+        self.title("テスト送信先の選択（宛先を絞る）")
+        self.geometry("560x620")
+        self.transient(parent)
+        self.grab_set()
+        self.result: tuple[list[MemberT], list[MemberT]] | None = None
+        self._app = parent
+        self._members = members
+        self._vars: list[tuple[MemberT, tk.StringVar]] = []
+
+        ttk.Label(
+            self,
+            text="テスト送信する宛先だけを選んでください（既定値は『テスト送信』列）。",
+            foreground="#555",
+        ).pack(anchor="w", padx=12, pady=(12, 4))
+
+        # 一括操作
+        top = ttk.Frame(self)
+        top.pack(fill="x", padx=12, pady=(0, 4))
+        ttk.Button(top, text="全て送らない", command=lambda: self._set_all("送らない")).pack(
+            side="left"
+        )
+        ttk.Button(top, text="既定に戻す", command=self._reset_defaults).pack(side="left", padx=6)
+
+        # メンバー一覧（縦スクロール）
+        body = ttk.Frame(self)
+        body.pack(fill="both", expand=True, padx=12, pady=4)
+        canvas = tk.Canvas(body, highlightthickness=0)
+        vbar = ttk.Scrollbar(body, orient="vertical", command=canvas.yview)
+        inner = ttk.Frame(canvas)
+        inner_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+        canvas.configure(yscrollcommand=vbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        vbar.pack(side="right", fill="y")
+        inner.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(inner_id, width=e.width))
+        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-e.delta / 120), "units"))
+
+        head = ttk.Frame(inner)
+        head.pack(fill="x", pady=(0, 2))
+        ttk.Label(head, text="送信区分", width=10, foreground="#555").pack(side="left")
+        ttk.Label(head, text="名前 / メールアドレス", foreground="#555").pack(side="left", padx=6)
+        for m in members:
+            row = ttk.Frame(inner)
+            row.pack(fill="x", pady=1)
+            var = tk.StringVar(value=self._KIND_TO_CHOICE[flag_kind(m["test"])])
+            ttk.Combobox(
+                row, textvariable=var, values=self._CHOICES, state="readonly", width=8
+            ).pack(side="left")
+            ttk.Label(row, text=f"{m['name']}  <{m['email']}>").pack(side="left", padx=8)
+            self._vars.append((m, var))
+
+        btns = ttk.Frame(self)
+        btns.pack(fill="x", padx=12, pady=10)
+        ttk.Button(btns, text="キャンセル", command=self._on_cancel).pack(side="right", padx=6)
+        ttk.Button(btns, text="この宛先で下書き作成", command=self._on_ok).pack(side="right")
+
+        self.bind("<Escape>", lambda _e: self._on_cancel())
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+
+    def _set_all(self, choice: str) -> None:
+        for _m, var in self._vars:
+            var.set(choice)
+
+    def _reset_defaults(self) -> None:
+        for m, var in self._vars:
+            var.set(self._KIND_TO_CHOICE[flag_kind(m["test"])])
+
+    def _on_ok(self) -> None:
+        to_list = [m for m, var in self._vars if var.get() == "TO"]
+        cc_list = [m for m, var in self._vars if var.get() == "CC"]
+        self.result = (to_list, cc_list)
+        self._teardown()
+
+    def _on_cancel(self) -> None:
+        self.result = None
+        self._teardown()
+
+    def _teardown(self) -> None:
+        # bind_all はアプリ全体に効くため、閉じる際は App 本体のホイール束ねを復元する
+        # （解除したままだと本画面の縦スクロールがホイールで効かなくなる）。
+        handler = getattr(self._app, "_on_mousewheel", None)
+        if handler is not None:
+            self._app.bind_all("<MouseWheel>", handler)
+        else:
+            self.unbind_all("<MouseWheel>")
+        self.destroy()
+
+
 class App(tk.Tk):
     """メインウィンドウ。"""
 
@@ -137,13 +243,62 @@ class App(tk.Tk):
         # 送信前に1回だけ構築する register payload。sent_at を固定し、
         # DOVE登録失敗時に「メール再送なし」で再試行するために保持する。
         self._pending_payload: dict[str, Any] | None = None
+        # 縦スクロール対象の Canvas（軸が増えても操作ボタンが隠れないようにする）。
+        # 画面遷移ごとに張り替えるため、ホイールは1度だけ束ねて参照先で切替える。
+        self._scroll_canvas: tk.Canvas | None = None
+        self.bind_all("<MouseWheel>", self._on_mousewheel)
 
         self._build_role_select()
+
+    # ------------------------------------------------------------------
+    # スクロール基盤（ヘッダー固定・中央スクロール・操作ボタン固定）
+    # ------------------------------------------------------------------
+    def _on_mousewheel(self, event: tk.Event) -> None:
+        """現在表示中のスクロール領域をホイールで縦スクロールする。"""
+        canvas = self._scroll_canvas
+        if canvas is not None and canvas.winfo_exists():
+            canvas.yview_scroll(int(-event.delta / 120), "units")
+
+    def _make_scrollable(self, parent: tk.Misc) -> ttk.Frame:
+        """parent 内に縦スクロール可能な内側フレームを作って返す。
+
+        Canvas + Scrollbar で「中身が縦に伸びても見切れない」領域を作る。
+        内側フレームの幅は Canvas 幅に追従させ、横スクロールは出さない。
+        """
+        canvas = tk.Canvas(parent, highlightthickness=0)
+        vbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        inner = ttk.Frame(canvas)
+        inner_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+        canvas.configure(yscrollcommand=vbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        vbar.pack(side="right", fill="y")
+
+        def _on_inner_config(_e: tk.Event) -> None:
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _on_canvas_config(e: tk.Event) -> None:
+            canvas.itemconfigure(inner_id, width=e.width)
+
+        inner.bind("<Configure>", _on_inner_config)
+        canvas.bind("<Configure>", _on_canvas_config)
+        self._scroll_canvas = canvas
+        return inner
+
+    @staticmethod
+    def _bind_text_wheel(widget: tk.Misc) -> None:
+        """テキスト欄上ではその欄自身をスクロールし、外側 Canvas へ伝播させない。"""
+
+        def _wheel(event: tk.Event) -> str:
+            widget.yview_scroll(int(-event.delta / 120), "units")  # type: ignore[attr-defined]
+            return "break"
+
+        widget.bind("<MouseWheel>", _wheel)
 
     # ------------------------------------------------------------------
     # 役割選択
     # ------------------------------------------------------------------
     def _build_role_select(self) -> None:
+        self._scroll_canvas = None
         self.frm_main = ttk.Frame(self)
         self.frm_main.pack(fill="both", expand=True)
 
@@ -208,18 +363,52 @@ class App(tk.Tk):
         pad = {"padx": 12, "pady": 6}
         label = "LW工番" if role == ROLE_LW else "TS工番"
 
-        ttk.Button(self.frm_main, text="← 戻る", command=self._go_back).pack(
-            anchor="w", padx=10, pady=6
+        # ── 固定ヘッダー（戻る / タイトル）──────────────────────────────
+        head = ttk.Frame(self.frm_main)
+        head.pack(fill="x", side="top")
+        ttk.Button(head, text="← 戻る", command=self._go_back).pack(anchor="w", padx=10, pady=6)
+        ttk.Label(head, text=f"出図のお知らせ（{label}）", font=("", 13, "bold")).pack(pady=(0, 6))
+        ttk.Separator(self.frm_main, orient="horizontal").pack(fill="x", side="top")
+
+        # ── 固定フッター（操作ボタン / ステータス）── 先に下から確保し、
+        #    残り領域をスクロール領域に充てる（軸が増えてもボタンが隠れない）。
+        self.var_status = tk.StringVar(value="軸を追加してください")
+        ttk.Label(self.frm_main, textvariable=self.var_status, foreground="gray").pack(
+            side="bottom", fill="x", pady=(2, 6), padx=12
         )
-        ttk.Label(self.frm_main, text=f"出図のお知らせ（{label}）", font=("", 13, "bold")).pack(
-            pady=(4, 10)
-        )
+        # 2段構成（下=テスト / 上=本番）。bottom 詰めなので「テスト行→本番行」の順に積む。
+        frm_test = ttk.Frame(self.frm_main)
+        frm_test.pack(fill="x", side="bottom", padx=12, pady=(2, 4))
+        ttk.Button(
+            frm_test,
+            text="テスト下書き作成（宛先を絞る・DOVE登録なし）",
+            command=self._test_draft_zuzu,
+        ).pack(side="left", padx=10)
+        frm_btn = ttk.Frame(self.frm_main)
+        frm_btn.pack(fill="x", side="bottom", **pad)
+        ttk.Separator(self.frm_main, orient="horizontal").pack(fill="x", side="bottom")
+        ttk.Button(
+            frm_btn,
+            text="下書き作成 → DOVE登録",
+            command=lambda: self._submit_zuzu("draft"),
+        ).pack(side="left", padx=10)
+        ttk.Button(
+            frm_btn,
+            text="DOVE登録のみ（メール送信なし）",
+            command=lambda: self._submit_zuzu("dove"),
+        ).pack(side="left", padx=10)
+        ttk.Button(
+            frm_btn,
+            text="確認して送信 → DOVE登録",
+            command=lambda: self._submit_zuzu("send"),
+        ).pack(side="right", padx=10)
+
+        # ── 中央スクロール領域（軸 / 指示書 / 宛先 / 本文編集）──────────
+        body = self._make_scrollable(self.frm_main)
 
         # 1. 軸構成
-        frm_axes_outer = ttk.LabelFrame(
-            self.frm_main, text="1. 軸の構成（＋で軸を追加・軸名を入力）"
-        )
-        frm_axes_outer.pack(fill="both", expand=True, **pad)
+        frm_axes_outer = ttk.LabelFrame(body, text="1. 軸の構成（＋で軸を追加・軸名を入力）")
+        frm_axes_outer.pack(fill="x", **pad)
 
         header = ttk.Frame(frm_axes_outer)
         header.pack(fill="x", padx=8, pady=(6, 0))
@@ -229,12 +418,10 @@ class App(tk.Tk):
         ).pack(side="left", padx=10)
 
         self.frm_axes = ttk.Frame(frm_axes_outer)
-        self.frm_axes.pack(fill="both", expand=True, padx=8, pady=6)
+        self.frm_axes.pack(fill="x", padx=8, pady=6)
 
         # 2. 工番別指示書PDF（Job単位・添付）
-        frm_instr = ttk.LabelFrame(
-            self.frm_main, text="2. 工番別指示書PDF（工番に1つ・メール添付）"
-        )
+        frm_instr = ttk.LabelFrame(body, text="2. 工番別指示書PDF（工番に1つ・メール添付）")
         frm_instr.pack(fill="x", **pad)
         row = ttk.Frame(frm_instr)
         row.pack(fill="x", padx=10, pady=8)
@@ -243,40 +430,31 @@ class App(tk.Tk):
         ttk.Label(row, textvariable=self.var_instruction, wraplength=560).pack(side="left", padx=10)
 
         # 3. 宛先
-        frm_dest = ttk.LabelFrame(self.frm_main, text="3. 宛先（自動振り分け）")
+        frm_dest = ttk.LabelFrame(body, text="3. 宛先（自動振り分け）")
         frm_dest.pack(fill="x", **pad)
         to_text, cc_text, _to, _cc = get_recipients_label(self.members, role)
         ttk.Label(frm_dest, text=to_text).pack(anchor="w", padx=10, pady=4)
         ttk.Label(frm_dest, text=cc_text).pack(anchor="w", padx=10, pady=(0, 8))
 
-        # 4. プレビュー
-        frm_body = ttk.LabelFrame(self.frm_main, text="4. 本文プレビュー")
-        frm_body.pack(fill="both", expand=True, **pad)
-        ttk.Button(
-            frm_body, text="プレビュー更新（工番情報をDOVEから取得）", command=self._refresh_preview
-        ).pack(anchor="w", padx=10, pady=(8, 2))
-        self.txt_preview = scrolledtext.ScrolledText(frm_body, height=10, wrap="word")
-        self.txt_preview.pack(fill="both", expand=True, padx=10, pady=(0, 8))
-        self._set_text(
-            self.txt_preview, "（軸を追加し『プレビュー更新』を押すと本文が表示されます）"
+        # 4. 本文（プレビュー兼編集欄）
+        frm_body = ttk.LabelFrame(body, text="4. 本文（編集可・送信前にここで直接修正できます）")
+        frm_body.pack(fill="x", **pad)
+        subj_row = ttk.Frame(frm_body)
+        subj_row.pack(fill="x", padx=10, pady=(8, 2))
+        ttk.Label(subj_row, text="件名:", foreground="#555").pack(side="left")
+        self.var_subject = tk.StringVar(value="（軸の出図PDFから自動作成）")
+        ttk.Label(subj_row, textvariable=self.var_subject, anchor="w").pack(
+            side="left", fill="x", expand=True, padx=6
         )
-
-        # 送信
-        frm_btn = ttk.Frame(self.frm_main)
-        frm_btn.pack(fill="x", **pad)
         ttk.Button(
-            frm_btn,
-            text="下書き作成（Outlook表示・DOVE登録なし）",
-            command=lambda: self._send_zuzu(False),
-        ).pack(side="left", padx=10)
-        ttk.Button(
-            frm_btn, text="確認して送信 → DOVE登録", command=lambda: self._send_zuzu(True)
-        ).pack(side="left", padx=10)
-
-        self.var_status = tk.StringVar(value="軸を追加してください")
-        ttk.Label(self.frm_main, textvariable=self.var_status, foreground="gray").pack(
-            side="bottom", pady=6
-        )
+            frm_body,
+            text="本文を再生成（工番情報をDOVEから取得・編集内容は上書き）",
+            command=self._refresh_preview,
+        ).pack(anchor="w", padx=10, pady=(0, 2))
+        self.txt_preview = scrolledtext.ScrolledText(frm_body, height=12, wrap="word")
+        self.txt_preview.pack(fill="x", padx=10, pady=(0, 8))
+        self.txt_preview.insert("1.0", _BODY_PLACEHOLDER)
+        self._bind_text_wheel(self.txt_preview)
 
         self._add_axis()
 
@@ -434,6 +612,7 @@ class App(tk.Tk):
             return None
 
     def _refresh_preview(self) -> None:
+        """工番情報を取得し、件名と本文（編集欄）を再生成する。編集内容は上書きされる。"""
         resolved = self._resolve_job()
         if resolved is None:
             return
@@ -441,8 +620,18 @@ class App(tk.Tk):
         axes = self._build_axis_mail_entries()
         subject = mailer.build_zuzu_subject(job_id)
         body = mailer.build_zuzu_body(self.current_role or "", job_id, axes)
-        self._set_text(self.txt_preview, f"件名: {subject}\n\n{body}")
-        self.var_status.set(f"プレビュー更新: 工番 {job_id} / 軸 {len(axes)}件")
+        self.var_subject.set(subject)
+        self.txt_preview.delete("1.0", "end")
+        self.txt_preview.insert("1.0", body)
+        self.var_status.set(f"本文を再生成: 工番 {job_id} / 軸 {len(axes)}件")
+
+    def _zuzu_edited_body(self) -> str | None:
+        """編集欄の本文を返す。未編集（空欄 or 初期メッセージ）なら None。"""
+        text = self.txt_preview.get("1.0", "end").rstrip("\n")
+        stripped = text.strip()
+        if not stripped or stripped == _BODY_PLACEHOLDER.strip():
+            return None
+        return text
 
     # ------------------------------------------------------------------
     # 送信 + DOVE登録
@@ -492,7 +681,16 @@ class App(tk.Tk):
             )
         return entries
 
-    def _send_zuzu(self, send_immediately: bool) -> None:
+    def _submit_zuzu(self, mode: str) -> None:
+        """出図のお知らせを3モードで実行する。
+
+        - ``"send"`` : 確認ダイアログ → メール送信 → DOVE登録（送信履歴 mail_logs を記録）。
+        - ``"draft"``: Outlook 下書き表示 → DOVE登録（mail なし＝送信履歴は残さない）。
+        - ``"dove"`` : メールを一切作らず DOVE登録のみ（mail なし）。
+
+        図面データ（Job/軸/出図PDF/DXF/指示書）の登録は3モード共通。送信履歴は実際に
+        送信した ``send`` のときだけ ``mail`` ブロックを付けて記録する（要件①③）。
+        """
         if not self.current_role:
             return
 
@@ -507,12 +705,13 @@ class App(tk.Tk):
             return
         job_id, kubun = resolved
 
+        # 宛先はメールを作るモード（send/draft）でのみ必須。
         to_list, cc_list = get_recipients(self.members, self.current_role)
-        if not to_list:
+        if mode in ("send", "draft") and not to_list:
             messagebox.showwarning(APP_TITLE, "宛先(TO)が0名です。\n送付先一覧を確認してください。")
             return
 
-        # ★ パス相対化は送信前に検証（不一致なら登録前=送信前に中断）。設計書 §4/§6-4。
+        # ★ パス相対化は登録/送信前に検証（不一致なら中断）。設計書 §4/§6-4。
         try:
             axes_payload = self._build_axes_payload()
             instr_rel = (
@@ -521,7 +720,7 @@ class App(tk.Tk):
                 else None
             )
         except ValueError as e:
-            messagebox.showerror(APP_TITLE, f"パス変換エラー（送信を中止しました）:\n{e}")
+            messagebox.showerror(APP_TITLE, f"パス変換エラー（処理を中止しました）:\n{e}")
             return
 
         # 本文用: 軸ごとに（PDFファイル名の枝番で）マスタ照会し、納品先/製品名/軸名称を明記。
@@ -534,11 +733,25 @@ class App(tk.Tk):
         delivery_date = None
 
         subject = mailer.build_zuzu_subject(job_id)
-        body = mailer.build_zuzu_body(self.current_role, job_id, mail_axes)
-        html_body = mailer.build_zuzu_html_body(self.current_role, job_id, mail_axes)
+
+        # 本文は編集欄を最優先。未編集なら自動生成し、編集欄にも反映（送信内容を見せる）。
+        body = self._zuzu_edited_body()
+        if body is None:
+            body = mailer.build_zuzu_body(self.current_role, job_id, mail_axes)
+            self.var_subject.set(subject)
+            self.txt_preview.delete("1.0", "end")
+            self.txt_preview.insert("1.0", body)
+        # 編集後テキスト中の UNC 行を自動リンク化して HTML 本文にする（要件②）。
+        html_body = mailer.build_html_from_text(body)
         attachments = [self.instruction_unc] if self.instruction_unc else None
 
-        if send_immediately:
+        if mode == "dove":
+            self._submit_zuzu_dove_only(
+                job_id, kubun, customer, hinmei, delivery_date, axes_payload, instr_rel
+            )
+            return
+
+        if mode == "send":
             dlg = ConfirmDialog(
                 self, self.current_role, to_list, cc_list, subject, body, attachments
             )
@@ -546,24 +759,24 @@ class App(tk.Tk):
             if not dlg.result:
                 return
 
-        # ★ 送信即時のみ: register payload を「メール送信前に1回だけ」構築して保持する。
-        # sent_at をこの1回の値で固定 → 再試行でも冪等キー (job_id, subject, sent_at) が
-        # 不変になり、メール二重送信・mail_logs 重複を防ぐ（設計書 §6-1）。
-        if send_immediately:
-            self._pending_payload = self._build_register_payload(
-                job_id,
-                kubun,
-                customer,
-                hinmei,
-                delivery_date,
-                axes_payload,
-                instr_rel,
-                subject,
-                to_list,
-                cc_list,
-            )
+        # register payload を「メール作成前に1回だけ」構築して保持する。
+        # send は mail ブロック付き（sent_at 固定で冪等キー不変・mail_logs 重複防止）。
+        # draft は mail なし（送信していないため送信履歴を残さない・要件①）。
+        self._pending_payload = self._build_register_payload(
+            job_id,
+            kubun,
+            customer,
+            hinmei,
+            delivery_date,
+            axes_payload,
+            instr_rel,
+            subject,
+            to_list,
+            cc_list,
+            include_mail=(mode == "send"),
+        )
 
-        # メール送信
+        # メール作成（send=即送信 / draft=Outlook下書き表示）
         try:
             mailer.send_outlook_mail(
                 to_list,
@@ -571,48 +784,178 @@ class App(tk.Tk):
                 subject,
                 body,
                 attachments=attachments,
-                send_immediately=send_immediately,
+                send_immediately=(mode == "send"),
                 html_body=html_body,
             )
         except Exception as e:  # noqa: BLE001 - 失敗をログ+ダイアログで通知
+            verb = "送信" if mode == "send" else "下書き"
             mailer.append_send_log(self.current_role, to_list, cc_list, subject, f"失敗: {e}")
-            messagebox.showerror(APP_TITLE, f"メール送信エラー:\n{e}")
+            messagebox.showerror(APP_TITLE, f"メール{verb}エラー:\n{e}")
             return
 
-        action = "送信" if send_immediately else "下書き"
+        action = "送信" if mode == "send" else "下書き"
         mailer.append_send_log(self.current_role, to_list, cc_list, subject, action)
         now = datetime.datetime.now().strftime("%H:%M:%S")
 
-        if not send_immediately:
-            self.var_status.set(f"下書き作成 {now} — Outlookに表示しました（DOVE登録なし）")
-            return
-
-        # 送信成功時のみ DOVE 登録（保持済み payload で冪等。失敗してもメールは再送しない）。
+        # 送信/下書きの後に DOVE 登録（保持済み payload で冪等。失敗してもメールは再送しない）。
         payload = self._pending_payload
         if payload is None:
             return
         try:
             result = self.dove.register(payload)
-        except Exception as e:  # noqa: BLE001 - メールは送信済。登録のみ再試行で整合回復可。
-            self.var_status.set(f"送信完了 {now} / DOVE登録は失敗（登録のみ再試行可）")
+        except Exception as e:  # noqa: BLE001 - メールは作成済。登録のみ再試行で整合回復可。
+            self.var_status.set(f"{action} {now} / DOVE登録は失敗（登録のみ再試行可）")
             if messagebox.askretrycancel(
                 APP_TITLE,
-                "メールは送信しましたが、DOVE登録に失敗しました。\n"
-                "［再試行］を押すと、メールは再送せず登録だけ補完します（冪等）。\n\n"
+                f"メールは{action}しましたが、DOVE登録に失敗しました。\n"
+                "［再試行］を押すと、メールは再作成せず登録だけ補完します（冪等）。\n\n"
                 f"詳細: {e}",
             ):
                 self._retry_register_only()
             return
 
         self._pending_payload = None
+        suffix = "（Outlookに下書き表示）" if mode == "draft" else ""
         self.var_status.set(
-            f"送信完了 {now} / DOVE登録OK 工番{result.get('job_id', job_id)} "
-            f"軸{len(result.get('axes', []))}件"
+            f"{action}完了 {now} / DOVE登録OK 工番{result.get('job_id', job_id)} "
+            f"軸{len(result.get('axes', []))}件 {suffix}"
         )
         messagebox.showinfo(
             APP_TITLE,
-            f"送信 + DOVE登録が完了しました。\n工番: {result.get('job_id', job_id)}",
+            f"{action} + DOVE登録が完了しました。\n工番: {result.get('job_id', job_id)}",
         )
+
+    def _submit_zuzu_dove_only(
+        self,
+        job_id: str,
+        kubun: str,
+        customer: str | None,
+        hinmei: str | None,
+        delivery_date: str | None,
+        axes_payload: list[dict[str, Any]],
+        instr_rel: str | None,
+    ) -> None:
+        """メールを一切作らず DOVE登録のみ実行する（要件③・mail なし）。"""
+        if not messagebox.askokcancel(
+            APP_TITLE,
+            f"メールは送信せず、DOVEへの登録だけを行います。\n工番: {job_id}\n\nよろしいですか？",
+        ):
+            return
+        self._pending_payload = self._build_register_payload(
+            job_id,
+            kubun,
+            customer,
+            hinmei,
+            delivery_date,
+            axes_payload,
+            instr_rel,
+            mailer.build_zuzu_subject(job_id),
+            [],
+            [],
+            include_mail=False,
+        )
+        now = datetime.datetime.now().strftime("%H:%M:%S")
+        try:
+            result = self.dove.register(self._pending_payload)
+        except Exception as e:  # noqa: BLE001 - メールは未送信。登録のみ再試行で整合回復可。
+            self.var_status.set(f"DOVE登録のみ {now} / 失敗（再試行可）")
+            if messagebox.askretrycancel(
+                APP_TITLE,
+                f"DOVE登録に失敗しました（メールは送信していません）。\n"
+                "［再試行］で登録だけ再度補完します（冪等）。\n\n"
+                f"詳細: {e}",
+            ):
+                self._retry_register_only()
+            return
+        self._pending_payload = None
+        self.var_status.set(
+            f"DOVE登録のみ完了 {now} 工番{result.get('job_id', job_id)} "
+            f"軸{len(result.get('axes', []))}件（メール送信なし）"
+        )
+        messagebox.showinfo(
+            APP_TITLE,
+            "DOVE登録が完了しました（メールは送信していません）。\n"
+            f"工番: {result.get('job_id', job_id)}",
+        )
+
+    # ------------------------------------------------------------------
+    # テスト下書き（宛先を絞る・DOVE登録なし）
+    # ------------------------------------------------------------------
+    def _open_test_picker(self) -> tuple[list[MemberT], list[MemberT]] | None:
+        """テスト送信先ピッカーを開き、(TO, CC) を返す。キャンセル時は None。"""
+        dlg = RecipientPickerDialog(self, self.members)
+        self.wait_window(dlg)
+        return dlg.result
+
+    def _do_test_draft(
+        self,
+        role: str,
+        subject: str,
+        body: str,
+        html_body: str | None,
+        attachments: list[str] | None,
+    ) -> None:
+        """宛先を絞って Outlook 下書きを作る共通処理。DOVE登録は一切しない（要件・テスト）。"""
+        picked = self._open_test_picker()
+        if picked is None:
+            return
+        to_list, cc_list = picked
+        if not to_list:
+            messagebox.showwarning(APP_TITLE, "テスト送信のTO宛先を1名以上選んでください")
+            return
+
+        try:
+            mailer.send_outlook_mail(
+                to_list,
+                cc_list,
+                subject,
+                body,
+                attachments=attachments,
+                send_immediately=False,
+                html_body=html_body,
+            )
+        except Exception as e:  # noqa: BLE001 - 失敗をログ+ダイアログで通知
+            mailer.append_send_log(role, to_list, cc_list, subject, f"テスト失敗: {e}")
+            messagebox.showerror(APP_TITLE, f"テスト下書き作成エラー:\n{e}")
+            return
+
+        mailer.append_send_log(role, to_list, cc_list, subject, "テスト下書き")
+        now = datetime.datetime.now().strftime("%H:%M:%S")
+        to_names = ", ".join(m["name"] for m in to_list)
+        cc_names = ", ".join(m["name"] for m in cc_list) or "(なし)"
+        self.var_status.set(
+            f"テスト下書き作成 {now} — TO({len(to_list)}): {to_names} / "
+            f"CC({len(cc_list)}): {cc_names}（DOVE登録なし）"
+        )
+        messagebox.showinfo(
+            APP_TITLE,
+            "テスト用の下書きをOutlookに表示しました（DOVE登録なし・送信はしていません）。\n\n"
+            f"TO: {to_names}\nCC: {cc_names}",
+        )
+
+    def _test_draft_zuzu(self) -> None:
+        """出図のお知らせを、絞った宛先でテスト下書き化する（DOVE登録なし）。"""
+        if not self.current_role:
+            return
+        named = [ax for ax in self.axes if ax["name_var"].get().strip() and ax["pdf_unc"]]
+        if not named:
+            messagebox.showwarning(APP_TITLE, "軸名と出図PDFを入力した軸を1つ以上用意してください")
+            return
+        resolved = self._resolve_job()
+        if resolved is None:
+            return
+        job_id, _kubun = resolved
+        mail_axes = self._build_axis_mail_entries()
+        subject = mailer.build_zuzu_subject(job_id)
+        body = self._zuzu_edited_body()
+        if body is None:
+            body = mailer.build_zuzu_body(self.current_role, job_id, mail_axes)
+            self.var_subject.set(subject)
+            self.txt_preview.delete("1.0", "end")
+            self.txt_preview.insert("1.0", body)
+        html_body = mailer.build_html_from_text(body)
+        attachments = [self.instruction_unc] if self.instruction_unc else None
+        self._do_test_draft(self.current_role, subject, body, html_body, attachments)
 
     def _retry_register_only(self) -> None:
         """メールを再送せず、保持済み payload で DOVE 登録のみを再試行する（冪等）。
@@ -661,10 +1004,15 @@ class App(tk.Tk):
         subject: str,
         to_list: list[MemberT],
         cc_list: list[MemberT],
+        *,
+        include_mail: bool,
     ) -> dict[str, Any]:
-        """DOVE 合成エンドポイントへの登録ペイロード（設計書 §2.1）。本文/PIIは入れない。"""
-        sent_at = datetime.datetime.now().astimezone().isoformat()
-        return {
+        """DOVE 合成エンドポイントへの登録ペイロード（設計書 §2.1）。本文/PIIは入れない。
+
+        ``include_mail=False`` のときは ``mail`` を付けない（下書き/DOVE登録のみでは
+        送信履歴 mail_logs を残さない・要件①③）。
+        """
+        payload: dict[str, Any] = {
             "job_id": job_id,
             "kubun": kubun,
             "title": hinmei or None,
@@ -676,19 +1024,23 @@ class App(tk.Tk):
             "instruction_original_name": (
                 os.path.basename(self.instruction_unc) if self.instruction_unc else None
             ),
-            "mail": {
+            "mail": None,
+        }
+        if include_mail:
+            payload["mail"] = {
                 "subject": subject,
-                "sent_at": sent_at,
+                "sent_at": datetime.datetime.now().astimezone().isoformat(),
                 "body": "",
                 "to": [{"name": m["name"], "email": m["email"]} for m in to_list if m["email"]],
                 "cc": [{"name": m["name"], "email": m["email"]} for m in cc_list if m["email"]],
-            },
-        }
+            }
+        return payload
 
     # ------------------------------------------------------------------
     # 工番別指示書（毎週末報告分・メールのみ）
     # ------------------------------------------------------------------
     def _build_shiji_ui(self) -> None:
+        self._scroll_canvas = None
         self.frm_main = ttk.Frame(self)
         self.frm_main.pack(fill="both", expand=True)
         pad = {"padx": 12, "pady": 6}
@@ -732,6 +1084,11 @@ class App(tk.Tk):
         ttk.Button(frm_btn, text="確認して送信", command=lambda: self._send_shiji(True)).pack(
             side="left", padx=10
         )
+        ttk.Button(
+            frm_btn,
+            text="テスト下書き作成（宛先を絞る）",
+            command=self._test_draft_shiji,
+        ).pack(side="right", padx=10)
 
         self.var_status = tk.StringVar(value="ファイルを選択してください")
         ttk.Label(self.frm_main, textvariable=self.var_status, foreground="gray").pack(
@@ -791,6 +1148,15 @@ class App(tk.Tk):
             self.var_status.set(f"送信完了 {now} — TO:{len(to_list)}名")
         else:
             self.var_status.set(f"下書き作成 {now} — Outlookに表示しました")
+
+    def _test_draft_shiji(self) -> None:
+        """工番別指示書を、絞った宛先でテスト下書き化する（DOVE連携は元々なし）。"""
+        if not self.shiji_unc_path:
+            messagebox.showwarning(APP_TITLE, "ファイルを選択してください")
+            return
+        subject = mailer.build_shiji_subject()
+        body = mailer.build_shiji_body(self.shiji_unc_path)
+        self._do_test_draft(ROLE_SHIJI, subject, body, None, [self.shiji_unc_path])
 
     # ------------------------------------------------------------------
     # 共通ヘルパ

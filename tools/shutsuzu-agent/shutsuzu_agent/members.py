@@ -24,12 +24,27 @@ class Member(TypedDict):
     shiji: str
     lw: str
     ts: str
+    test: str
+
+
+def flag_kind(flag: str) -> str:
+    """フラグ文字列を ``"to"`` / ``"cc"`` / ``"none"`` に正規化する。
+
+    ``○``/``〇``/``O`` → TO、``CC`` → CC、それ以外（``×`` 等・空欄）→ none。
+    """
+    f = (flag or "").upper().strip()
+    if f in ("○", "〇", "O"):
+        return "to"
+    if f == "CC":
+        return "cc"
+    return "none"
 
 
 def load_members(xlsx_path: str) -> list[Member]:
     """送付先一覧.xlsx を読み込み、メンバーリストを返す。
 
-    ヘッダ: ID, 名前, メールアドレス, 工番別指示書, LW工番, TS工番。
+    ヘッダ: ID, 名前, メールアドレス, 工番別指示書, LW工番, TS工番, テスト送信。
+    「テスト送信」列（7列目）は任意。無い旧フォーマットでも × 既定で読み込める。
     """
     wb = openpyxl.load_workbook(xlsx_path, data_only=True, read_only=True)
     try:
@@ -46,6 +61,7 @@ def load_members(xlsx_path: str) -> list[Member]:
                     shiji=(str(r[3]).strip() if len(r) > 3 and r[3] else "×"),
                     lw=(str(r[4]).strip() if len(r) > 4 and r[4] else "×"),
                     ts=(str(r[5]).strip() if len(r) > 5 and r[5] else "×"),
+                    test=(str(r[6]).strip() if len(r) > 6 and r[6] else "×"),
                 )
             )
         return members
@@ -68,10 +84,10 @@ def get_recipients(members: list[Member], role: str) -> tuple[list[Member], list
         else:
             flag = m["ts"]
 
-        flag_upper = flag.upper().strip()
-        if flag_upper in ("○", "〇", "O"):
+        kind = flag_kind(flag)
+        if kind == "to":
             to_list.append(m)
-        elif flag_upper == "CC":
+        elif kind == "cc":
             cc_list.append(m)
     return to_list, cc_list
 
