@@ -5,6 +5,10 @@
 # DOVE バックエンドの API ベースURL（社内LAN内）
 dove_base_url = "http://dove/api/v1"
 
+# TSC出張図面管理 (TTD) の API ベースURL。
+# TS工番の登録時は DOVE と TTD の両方に登録される (LW工番は DOVE のみ)。
+ttd_base_url = "http://ttd/api/v1"
+
 # ファイルサーバの UNC ルート。EXE で選択した UNC パスから、
 # このプレフィックスを除去して fileserver 相対 posix パスに変換して DOVE へ送る。
 fileserver_unc_root = "\\\\lineworks-sv\\Data"

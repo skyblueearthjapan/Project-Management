@@ -19,6 +19,8 @@ APP_TITLE = "出図のお知らせ × DOVE連携 メール送信"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "dove_base_url": "http://dove/api/v1",
+    # TS工番のとき DOVE に加えて登録する TSC出張図面管理 (TTD) のAPIベースURL。
+    "ttd_base_url": "http://ttd/api/v1",
     "fileserver_unc_root": "\\\\lineworks-sv\\Data",
     "member_xlsx": "送付先一覧.xlsx",
     "request_timeout_sec": 15,

@@ -232,6 +232,11 @@ class App(tk.Tk):
             str(config.get("dove_base_url") or "http://dove/api/v1"),
             float(config.get("request_timeout_sec") or 15),
         )
+        # TSC出張図面管理 (TTD)。TS工番のときだけ DOVE に加えて登録する。
+        self.ttd = DoveClient(
+            str(config.get("ttd_base_url") or "http://ttd/api/v1"),
+            float(config.get("request_timeout_sec") or 15),
+        )
 
         self.current_role: str | None = None
         self.axes: list[dict[str, Any]] = []
@@ -243,6 +248,9 @@ class App(tk.Tk):
         # 送信前に1回だけ構築する register payload。sent_at を固定し、
         # DOVE登録失敗時に「メール再送なし」で再試行するために保持する。
         self._pending_payload: dict[str, Any] | None = None
+        # 未完了の登録先名（"DOVE"/"TTD"）。成功した側は外れるため、
+        # 部分失敗からの再試行では失敗した側だけが再送される。
+        self._pending_targets: list[str] = []
         # 縦スクロール対象の Canvas（軸が増えても操作ボタンが隠れないようにする）。
         # 画面遷移ごとに張り替えるため、ホイールは1度だけ束ねて参照先で切替える。
         self._scroll_canvas: tk.Canvas | None = None
@@ -762,6 +770,7 @@ class App(tk.Tk):
         # register payload を「メール作成前に1回だけ」構築して保持する。
         # send は mail ブロック付き（sent_at 固定で冪等キー不変・mail_logs 重複防止）。
         # draft は mail なし（送信していないため送信履歴を残さない・要件①）。
+        self._pending_targets = []  # 新規送信のため登録先を再導出させる
         self._pending_payload = self._build_register_payload(
             job_id,
             kubun,
@@ -797,32 +806,36 @@ class App(tk.Tk):
         mailer.append_send_log(self.current_role, to_list, cc_list, subject, action)
         now = datetime.datetime.now().strftime("%H:%M:%S")
 
-        # 送信/下書きの後に DOVE 登録（保持済み payload で冪等。失敗してもメールは再送しない）。
+        # 送信/下書きの後に登録（保持済み payload で冪等。失敗してもメールは再送しない）。
+        # TS工番は DOVE + TTD の二重登録、LW工番は DOVE のみ（_targets_for）。
         payload = self._pending_payload
         if payload is None:
             return
-        try:
-            result = self.dove.register(payload)
-        except Exception as e:  # noqa: BLE001 - メールは作成済。登録のみ再試行で整合回復可。
-            self.var_status.set(f"{action} {now} / DOVE登録は失敗（登録のみ再試行可）")
+        targets_label = "/".join(self._targets_for(payload))
+        result, failures, succeeded = self._register_all(payload)
+        if failures:
+            failed = "/".join(failures)
+            ok_line = f"（{'/'.join(succeeded)}への登録は完了しています。）\n" if succeeded else ""
+            self.var_status.set(f"{action} {now} / {failed}登録は失敗（登録のみ再試行可）")
             if messagebox.askretrycancel(
                 APP_TITLE,
-                f"メールは{action}しましたが、DOVE登録に失敗しました。\n"
-                "［再試行］を押すと、メールは再作成せず登録だけ補完します（冪等）。\n\n"
-                f"詳細: {e}",
+                f"メールは{action}しましたが、{failed}への登録に失敗しました。\n"
+                f"{ok_line}"
+                "［再試行］を押すと、メールは再作成せず失敗した登録だけ補完します（冪等）。\n\n"
+                f"詳細:\n{self._failure_detail(failures)}",
             ):
                 self._retry_register_only()
             return
 
-        self._pending_payload = None
+        rid = (result or {}).get("job_id", job_id)
         suffix = "（Outlookに下書き表示）" if mode == "draft" else ""
         self.var_status.set(
-            f"{action}完了 {now} / DOVE登録OK 工番{result.get('job_id', job_id)} "
-            f"軸{len(result.get('axes', []))}件 {suffix}"
+            f"{action}完了 {now} / {targets_label}登録OK 工番{rid} "
+            f"軸{len((result or {}).get('axes', []))}件 {suffix}"
         )
         messagebox.showinfo(
             APP_TITLE,
-            f"{action} + DOVE登録が完了しました。\n工番: {result.get('job_id', job_id)}",
+            f"{action} + {targets_label}登録が完了しました。\n工番: {rid}",
         )
 
     def _submit_zuzu_dove_only(
@@ -835,12 +848,18 @@ class App(tk.Tk):
         axes_payload: list[dict[str, Any]],
         instr_rel: str | None,
     ) -> None:
-        """メールを一切作らず DOVE登録のみ実行する（要件③・mail なし）。"""
+        """メールを一切作らず登録のみ実行する（要件③・mail なし）。
+
+        TS工番は DOVE + TTD の二重登録、LW工番は DOVE のみ。
+        """
+        targets_label = "DOVE と TTD" if kubun == "TS" else "DOVE"
         if not messagebox.askokcancel(
             APP_TITLE,
-            f"メールは送信せず、DOVEへの登録だけを行います。\n工番: {job_id}\n\nよろしいですか？",
+            f"メールは送信せず、{targets_label}への登録だけを行います。\n"
+            f"工番: {job_id}\n\nよろしいですか？",
         ):
             return
+        self._pending_targets = []  # 新規登録のため登録先を再導出させる
         self._pending_payload = self._build_register_payload(
             job_id,
             kubun,
@@ -855,27 +874,29 @@ class App(tk.Tk):
             include_mail=False,
         )
         now = datetime.datetime.now().strftime("%H:%M:%S")
-        try:
-            result = self.dove.register(self._pending_payload)
-        except Exception as e:  # noqa: BLE001 - メールは未送信。登録のみ再試行で整合回復可。
-            self.var_status.set(f"DOVE登録のみ {now} / 失敗（再試行可）")
+        registered_label = "/".join(self._targets_for(self._pending_payload))
+        result, failures, succeeded = self._register_all(self._pending_payload)
+        if failures:
+            failed = "/".join(failures)
+            ok_line = f"（{'/'.join(succeeded)}への登録は完了しています。）\n" if succeeded else ""
+            self.var_status.set(f"{failed}登録 {now} / 失敗（再試行可）")
             if messagebox.askretrycancel(
                 APP_TITLE,
-                f"DOVE登録に失敗しました（メールは送信していません）。\n"
-                "［再試行］で登録だけ再度補完します（冪等）。\n\n"
-                f"詳細: {e}",
+                f"{failed}への登録に失敗しました（メールは送信していません）。\n"
+                f"{ok_line}"
+                "［再試行］で失敗した登録だけ再度補完します（冪等）。\n\n"
+                f"詳細:\n{self._failure_detail(failures)}",
             ):
                 self._retry_register_only()
             return
-        self._pending_payload = None
+        rid = (result or {}).get("job_id", job_id)
         self.var_status.set(
-            f"DOVE登録のみ完了 {now} 工番{result.get('job_id', job_id)} "
-            f"軸{len(result.get('axes', []))}件（メール送信なし）"
+            f"{registered_label}登録のみ完了 {now} 工番{rid} "
+            f"軸{len((result or {}).get('axes', []))}件（メール送信なし）"
         )
         messagebox.showinfo(
             APP_TITLE,
-            "DOVE登録が完了しました（メールは送信していません）。\n"
-            f"工番: {result.get('job_id', job_id)}",
+            f"{registered_label}への登録が完了しました（メールは送信していません）。\n工番: {rid}",
         )
 
     # ------------------------------------------------------------------
@@ -957,39 +978,79 @@ class App(tk.Tk):
         attachments = [self.instruction_unc] if self.instruction_unc else None
         self._do_test_draft(self.current_role, subject, body, html_body, attachments)
 
+    def _targets_for(self, payload: dict[str, Any]) -> list[str]:
+        """payload の登録先。TS工番は DOVE + TTD の二重登録、それ以外は DOVE のみ。"""
+        if str(payload.get("kubun")) == "TS":
+            return ["DOVE", "TTD"]
+        return ["DOVE"]
+
+    def _register_all(
+        self, payload: dict[str, Any]
+    ) -> tuple[dict[str, Any] | None, dict[str, Exception], list[str]]:
+        """未完了の登録先すべてへ登録する（両エンドポイントとも冪等）。
+
+        成功した登録先は ``_pending_targets`` から外れるため、部分失敗後の再試行では
+        失敗した側だけが再送される。全登録先が成功したら保留状態をクリアする。
+
+        Returns:
+            (最後に成功した register 結果 | None, 失敗 {登録先名: 例外}, 今回成功した登録先名)
+        """
+        if not self._pending_targets:
+            self._pending_targets = self._targets_for(payload)
+        clients = {"DOVE": self.dove, "TTD": self.ttd}
+        failures: dict[str, Exception] = {}
+        succeeded: list[str] = []
+        result: dict[str, Any] | None = None
+        for name in list(self._pending_targets):
+            try:
+                result = clients[name].register(payload)
+            except Exception as e:  # noqa: BLE001 - 登録先ごとに失敗を集約し呼び出し側で通知
+                failures[name] = e
+            else:
+                succeeded.append(name)
+                self._pending_targets.remove(name)
+        if not failures:
+            self._pending_payload = None
+            self._pending_targets = []
+        return result, failures, succeeded
+
+    @staticmethod
+    def _failure_detail(failures: dict[str, Exception]) -> str:
+        return "\n".join(f"[{name}] {e}" for name, e in failures.items())
+
     def _retry_register_only(self) -> None:
-        """メールを再送せず、保持済み payload で DOVE 登録のみを再試行する（冪等）。
+        """メールを再送せず、保持済み payload で登録のみを再試行する（冪等）。
 
         ★ メール送信は一切行わない。冪等キー (job_id, subject, sent_at) は
         送信前に確定した payload で固定済みのため、何度再試行しても重複しない。
+        二重登録（TS工番）の部分失敗時は、失敗した登録先だけが再送される。
         """
         payload = self._pending_payload
         if payload is None:
-            messagebox.showinfo(APP_TITLE, "再試行できる保留中のDOVE登録はありません。")
+            messagebox.showinfo(APP_TITLE, "再試行できる保留中の登録はありません。")
             return
         job_id = str(payload.get("job_id", ""))
-        try:
-            result = self.dove.register(payload)
-        except Exception as e:  # noqa: BLE001 - メールは再送しない。再度の再試行で補完可。
-            self.var_status.set("DOVE登録の再試行に失敗（メールは再送していません）")
+        result, failures, _succeeded = self._register_all(payload)
+        if failures:
+            failed = "/".join(failures)
+            self.var_status.set(f"{failed}登録の再試行に失敗（メールは再送していません）")
             if messagebox.askretrycancel(
                 APP_TITLE,
-                "DOVE登録の再試行に失敗しました（メールは再送していません）。\n"
-                "［再試行］で登録だけ再度補完します（冪等）。\n\n"
-                f"詳細: {e}",
+                f"{failed}への登録の再試行に失敗しました（メールは再送していません）。\n"
+                "［再試行］で失敗した登録だけ再度補完します（冪等）。\n\n"
+                f"詳細:\n{self._failure_detail(failures)}",
             ):
                 self._retry_register_only()
             return
 
-        self._pending_payload = None
+        done = "/".join(self._targets_for(payload))
+        rid = (result or {}).get("job_id", job_id)
         self.var_status.set(
-            f"DOVE登録OK（再試行）工番{result.get('job_id', job_id)} "
-            f"軸{len(result.get('axes', []))}件"
+            f"{done}登録OK（再試行）工番{rid} 軸{len((result or {}).get('axes', []))}件"
         )
         messagebox.showinfo(
             APP_TITLE,
-            "DOVE登録が完了しました（メールは再送していません）。\n"
-            f"工番: {result.get('job_id', job_id)}",
+            f"{done}への登録が完了しました（メールは再送していません）。\n工番: {rid}",
         )
 
     def _build_register_payload(
