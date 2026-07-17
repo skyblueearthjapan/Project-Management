@@ -3,7 +3,8 @@ import { api } from "./client";
 import type { PhaseStamp } from "./stamps";
 
 // Phase A 刈り込み: "starred" は FilterValue から除外 (★ お気に入り機能廃止 — Round 3 合意)
-export type FilterValue = "all" | "inprog" | "over" | "thisweek";
+// "archived": 論理アーカイブ済み (削除ボタンで非表示化した工番) のみを返す
+export type FilterValue = "all" | "inprog" | "over" | "thisweek" | "archived";
 
 export interface AxisProgressRead {
   step_id: number;
@@ -36,6 +37,8 @@ export interface AxisRead {
     stamped_at: string | null;
     due_date: string | null;
   }>;
+  // 論理アーカイブ (削除ボタン)。null = アクティブ。
+  archived_at: string | null;
 }
 
 export interface JobRead {
@@ -49,6 +52,8 @@ export interface JobRead {
   status: "open" | "closed";
   created_at: string;
   updated_at: string;
+  // 論理アーカイブ (削除ボタン)。null = アクティブ。
+  archived_at: string | null;
   axes: AxisRead[];
   // Phase N: 工程ごとの電子データネーム印 (期日 / 押印状態)
   phase_stamps: PhaseStamp[];
@@ -92,10 +97,14 @@ export function useJobCounts(q?: string) {
   });
 }
 
-export function useJob(jobId: string | undefined) {
+export function useJob(
+  jobId: string | undefined,
+  includeArchivedAxes: boolean = false,
+) {
+  const qs = includeArchivedAxes ? "?include_archived_axes=true" : "";
   return useQuery({
-    queryKey: ["job", jobId],
-    queryFn: () => api<JobRead>(`/v1/jobs/${jobId}`),
+    queryKey: ["job", jobId, includeArchivedAxes],
+    queryFn: () => api<JobRead>(`/v1/jobs/${jobId}${qs}`),
     enabled: Boolean(jobId),
   });
 }
@@ -115,6 +124,69 @@ export function useCreateJob() {
     mutationFn: (body: JobCreate) =>
       api<JobRead>("/v1/jobs", { method: "POST", json: body }),
     onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["jobs"] });
+    },
+  });
+}
+
+// 工番・軸の論理アーカイブ (削除ボタン)。
+// 実ファイル・DB 行は消さない。archived_at を立てて一覧/詳細から非表示にするだけで、
+// 「アーカイブ済み」フィルタ / 復元パネルからいつでも戻せる。
+export function useArchiveJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (jobId: string) =>
+      api<JobRead>(`/v1/jobs/${encodeURIComponent(jobId)}/archive`, {
+        method: "PATCH",
+      }),
+    onSuccess: (_d, jobId) => {
+      void qc.invalidateQueries({ queryKey: ["jobs"] });
+      void qc.invalidateQueries({ queryKey: ["jobs-counts"] });
+      void qc.invalidateQueries({ queryKey: ["job", jobId] });
+    },
+  });
+}
+
+export function useUnarchiveJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (jobId: string) =>
+      api<JobRead>(`/v1/jobs/${encodeURIComponent(jobId)}/unarchive`, {
+        method: "PATCH",
+      }),
+    onSuccess: (_d, jobId) => {
+      void qc.invalidateQueries({ queryKey: ["jobs"] });
+      void qc.invalidateQueries({ queryKey: ["jobs-counts"] });
+      void qc.invalidateQueries({ queryKey: ["job", jobId] });
+    },
+  });
+}
+
+export function useArchiveAxis() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ jobId, axisId }: { jobId: string; axisId: number }) =>
+      api<{ id: number; archived_at: string | null }>(
+        `/v1/jobs/${encodeURIComponent(jobId)}/axes/${axisId}/archive`,
+        { method: "PATCH" },
+      ),
+    onSuccess: (_d, v) => {
+      void qc.invalidateQueries({ queryKey: ["job", v.jobId] });
+      void qc.invalidateQueries({ queryKey: ["jobs"] });
+    },
+  });
+}
+
+export function useUnarchiveAxis() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ jobId, axisId }: { jobId: string; axisId: number }) =>
+      api<{ id: number; archived_at: string | null }>(
+        `/v1/jobs/${encodeURIComponent(jobId)}/axes/${axisId}/unarchive`,
+        { method: "PATCH" },
+      ),
+    onSuccess: (_d, v) => {
+      void qc.invalidateQueries({ queryKey: ["job", v.jobId] });
       void qc.invalidateQueries({ queryKey: ["jobs"] });
     },
   });

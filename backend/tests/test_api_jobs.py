@@ -155,3 +155,83 @@ async def test_files_uploads_pattern_enforced(client: AsyncClient) -> None:
     assert r.status_code == 400
     r = await client.get("/api/v1/files/uploads?path=arbitrary/leak.pdf")
     assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_job_archive_and_unarchive(client: AsyncClient) -> None:
+    """工番の削除 (論理アーカイブ) → 一覧から消える → 復元で戻る。"""
+    await client.post("/api/v1/jobs", json={"id": "NK24-201", "title": "アーカイブ対象"})
+
+    # archive → 通常一覧から消え、archived フィルタに現れる
+    r = await client.patch("/api/v1/jobs/NK24-201/archive")
+    assert r.status_code == 200, r.text
+    assert r.json()["archived_at"] is not None
+
+    r = await client.get("/api/v1/jobs")
+    assert all(j["id"] != "NK24-201" for j in r.json()["items"])
+    r = await client.get("/api/v1/jobs?filter=archived")
+    assert any(j["id"] == "NK24-201" for j in r.json()["items"])
+
+    # counts にも archived が含まれる
+    r = await client.get("/api/v1/jobs/counts")
+    assert r.json()["archived"] >= 1
+
+    # unarchive → 通常一覧に復帰
+    r = await client.patch("/api/v1/jobs/NK24-201/unarchive")
+    assert r.status_code == 200
+    assert r.json()["archived_at"] is None
+    r = await client.get("/api/v1/jobs")
+    assert any(j["id"] == "NK24-201" for j in r.json()["items"])
+
+
+@pytest.mark.asyncio
+async def test_job_recreate_revives_archived(client: AsyncClient) -> None:
+    """アーカイブ済み工番の再登録は 409 ではなく自動復活。"""
+    await client.post("/api/v1/jobs", json={"id": "NK24-202", "title": "復活テスト"})
+
+    # アクティブなまま再登録 → 従来通り 409
+    r = await client.post("/api/v1/jobs", json={"id": "NK24-202", "title": "重複"})
+    assert r.status_code == 409
+
+    await client.patch("/api/v1/jobs/NK24-202/archive")
+    r = await client.post("/api/v1/jobs", json={"id": "NK24-202", "title": "再登録"})
+    assert r.status_code == 201, r.text
+    assert r.json()["archived_at"] is None
+    # 既存行の温存 (title は上書きされない)
+    assert r.json()["title"] == "復活テスト"
+
+
+@pytest.mark.asyncio
+async def test_axis_archive_unarchive_and_revive(client: AsyncClient) -> None:
+    """軸の削除 (論理アーカイブ) / 復元 / 同名再作成での自動復活。"""
+    await client.post("/api/v1/jobs", json={"id": "NK24-203", "title": "軸テスト"})
+    r = await client.post(
+        "/api/v1/jobs/NK24-203/axes", json={"name": "昇降軸", "sort_order": 1}
+    )
+    axis_id = r.json()["id"]
+
+    # 同名軸の再作成 (アクティブ) → 409
+    r = await client.post("/api/v1/jobs/NK24-203/axes", json={"name": "昇降軸"})
+    assert r.status_code == 409
+
+    # archive → 詳細から消える。include_archived_axes=true では見える
+    r = await client.patch(f"/api/v1/jobs/NK24-203/axes/{axis_id}/archive")
+    assert r.status_code == 200
+    assert r.json()["archived_at"] is not None
+    r = await client.get("/api/v1/jobs/NK24-203")
+    assert len(r.json()["axes"]) == 0
+    r = await client.get("/api/v1/jobs/NK24-203?include_archived_axes=true")
+    assert len(r.json()["axes"]) == 1
+    assert r.json()["axes"][0]["archived_at"] is not None
+
+    # 同名軸の再作成 → 既存行が自動復活 (同じ id が返る)
+    r = await client.post("/api/v1/jobs/NK24-203/axes", json={"name": "昇降軸"})
+    assert r.status_code == 201
+    assert r.json()["id"] == axis_id
+    r = await client.get("/api/v1/jobs/NK24-203")
+    assert len(r.json()["axes"]) == 1
+
+    # unarchive は冪等
+    r = await client.patch(f"/api/v1/jobs/NK24-203/axes/{axis_id}/unarchive")
+    assert r.status_code == 200
+    assert r.json()["archived_at"] is None

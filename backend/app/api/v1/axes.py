@@ -62,6 +62,32 @@ async def create_axis(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await _ensure_job(db, job_id)
+
+    # 同名軸の存在チェック (uq_axes_job_name)。
+    # アクティブなら 409、アーカイブ済みなら自動復活 (行は温存)。
+    existing = (
+        await db.execute(
+            select(Axis).where(Axis.job_id == job_id, Axis.name == body.name)
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        if existing.archived_at is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="同じ名前の軸が既に存在します",
+            )
+        existing.archived_at = None
+        await db.flush()
+        await write_action_log(
+            db,
+            actor=client_actor(request),
+            action_type="axis.unarchive",
+            job_id=job_id,
+            axis_id=existing.id,
+            payload={"job_id": job_id, "axis_name": existing.name, "reason": "re-register"},
+        )
+        return {"id": existing.id, "name": existing.name}
+
     axis = Axis(job_id=job_id, **body.model_dump())
     db.add(axis)
     await db.flush()
@@ -94,6 +120,52 @@ async def update_axis(
         setattr(axis, k, v)
     await db.flush()
     return {"id": axis.id}
+
+
+# ─────────────────────────────────────────────────────────────
+# 軸の論理アーカイブ (削除ボタン):
+#   - archive   : archived_at = now()。実ファイル・配下の行 (versions / dxf 等) は
+#                 一切消さない (CLAUDE.md §2.1)。表示上まとめて非表示になるだけ。
+#   - unarchive : archived_at = NULL (復元)
+# ─────────────────────────────────────────────────────────────
+
+
+@router.patch("/{job_id}/axes/{axis_id}/archive")
+async def archive_axis(
+    job_id: str, axis_id: int, request: Request, db: AsyncSession = Depends(get_db)
+) -> dict:
+    axis = await _ensure_axis(db, job_id, axis_id)
+    if axis.archived_at is None:
+        axis.archived_at = datetime.now(UTC)
+        await db.flush()
+        await write_action_log(
+            db,
+            actor=client_actor(request),
+            action_type="axis.archive",
+            job_id=job_id,
+            axis_id=axis.id,
+            payload={"job_id": job_id, "axis_name": axis.name},
+        )
+    return {"id": axis.id, "archived_at": axis.archived_at}
+
+
+@router.patch("/{job_id}/axes/{axis_id}/unarchive")
+async def unarchive_axis(
+    job_id: str, axis_id: int, request: Request, db: AsyncSession = Depends(get_db)
+) -> dict:
+    axis = await _ensure_axis(db, job_id, axis_id)
+    if axis.archived_at is not None:
+        axis.archived_at = None
+        await db.flush()
+        await write_action_log(
+            db,
+            actor=client_actor(request),
+            action_type="axis.unarchive",
+            job_id=job_id,
+            axis_id=axis.id,
+            payload={"job_id": job_id, "axis_name": axis.name},
+        )
+    return {"id": axis.id, "archived_at": axis.archived_at}
 
 
 @router.get("/{job_id}/axes/{axis_id}/versions", response_model=list[VersionRead])

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import and_, func, or_, select, text
@@ -170,11 +170,18 @@ def _serialize_axis(
             "latest_release_at": latest_version.released_at if latest_version else None,
             "current_version_link_broken": current_broken,
             "phase_stamps": phase_stamps,
+            "archived_at": axis.archived_at,
         }
     )
 
 
 def _filtered(stmt, q: str | None, filt: str, today):
+    # 論理アーカイブ: "archived" フィルタのみアーカイブ済を返し、
+    # それ以外のフィルタは常にアクティブ (archived_at IS NULL) に限定する。
+    if filt == "archived":
+        stmt = stmt.where(Job.archived_at.is_not(None))
+    else:
+        stmt = stmt.where(Job.archived_at.is_(None))
     if q:
         # クエリ側を Python で NFKC + lower、DB 側を SQL の translate + lower で
         # 揃えてから ilike。これで全角/半角・大文字小文字・全角記号の差異を吸収して
@@ -227,8 +234,11 @@ async def search_master(
     if only_active:
         stmt = stmt.where(JobMasterCache.is_active.is_(True))
     if exclude_existing:
-        # サブクエリで jobs.id に既に登録済のものを除外
-        stmt = stmt.where(~JobMasterCache.job_no.in_(select(Job.id)))
+        # サブクエリで jobs.id に既に登録済のものを除外。
+        # アーカイブ済み工番は候補に残す (再登録 = 自動復活の入口にする)。
+        stmt = stmt.where(
+            ~JobMasterCache.job_no.in_(select(Job.id).where(Job.archived_at.is_(None)))
+        )
     if q_norm:
         like = f"%{q_norm}%"
         # SQL 側でも lower() を使って大文字小文字を吸収。日本語は NFKC を保証できないが、
@@ -282,7 +292,7 @@ async def list_counts(
     today = datetime.now().date()
     out: dict[str, int] = {}
     # Phase A 刈り込み: "starred" は除外 (★ お気に入り機能廃止 — Round 3 合意)
-    for f in ("all", "inprog", "over", "thisweek"):
+    for f in ("all", "inprog", "over", "thisweek", "archived"):
         stmt = _filtered(select(func.count(Job.id)), q, f, today)
         out[f] = (await db.execute(stmt)).scalar_one()
     return out
@@ -292,7 +302,7 @@ async def list_counts(
 async def list_jobs(
     q: str | None = Query(default=None, description="フリーテキスト検索"),
     # Phase A 刈り込み: "starred" は pattern から除外 (★ お気に入り機能廃止 — Round 3 合意)
-    filter: str = Query(default="all", pattern="^(all|inprog|over|thisweek)$"),
+    filter: str = Query(default="all", pattern="^(all|inprog|over|thisweek|archived)$"),
     sort: str = Query(default="due", pattern="^(due|id|progress)$"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
@@ -347,12 +357,13 @@ async def list_jobs(
         cur.id
         for j in rows
         for a in j.axes
-        if (cur := _active_current(a)) is not None
+        if a.archived_at is None and (cur := _active_current(a)) is not None
     ]
     version_broken_map = await latest_link_status(
         db, TARGET_VERSION, current_version_ids
     )
 
+    # 一覧はアーカイブ済み軸を常に除外 (復元 UI は詳細画面側に持つ)。
     items = [
         JobRead.model_validate(
             {
@@ -360,6 +371,7 @@ async def list_jobs(
                 "axes": [
                     _serialize_axis(a, step_map, version_broken_map, worker_map)
                     for a in j.axes
+                    if a.archived_at is None
                 ],
                 "phase_stamps": _serialize_phase_stamps(j.phase_stamps, worker_map),
             }
@@ -385,7 +397,14 @@ async def list_jobs(
 
 
 @router.get("/{job_id}", response_model=JobRead)
-async def get_job(job_id: str, db: AsyncSession = Depends(get_db)) -> JobRead:
+async def get_job(
+    job_id: str,
+    include_archived_axes: bool = Query(
+        default=False,
+        description="True でアーカイブ済みの軸も返す (復元パネル用)",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> JobRead:
     stmt = (
         select(Job)
         .where(Job.id == job_id)
@@ -420,17 +439,23 @@ async def get_job(job_id: str, db: AsyncSession = Depends(get_db)) -> JobRead:
         return max(active, key=lambda v: v.version_no) if active else None
 
     current_version_ids = [
-        cur.id for a in job.axes if (cur := _active_current(a)) is not None
+        cur.id
+        for a in job.axes
+        if a.archived_at is None and (cur := _active_current(a)) is not None
     ]
     version_broken_map = await latest_link_status(
         db, TARGET_VERSION, current_version_ids
     )
+    # 既定はアクティブ軸のみ。復元パネルからは include_archived_axes=true で全件取得。
+    axes = [
+        a for a in job.axes if include_archived_axes or a.archived_at is None
+    ]
     return JobRead.model_validate(
         {
             **{c.name: getattr(job, c.name) for c in Job.__table__.columns},
             "axes": [
                 _serialize_axis(a, step_map, version_broken_map, worker_map)
-                for a in job.axes
+                for a in axes
             ],
             "phase_stamps": _serialize_phase_stamps(job.phase_stamps, worker_map),
         }
@@ -443,9 +468,21 @@ async def create_job(
 ) -> JobRead:
     existing = await db.get(Job, body.id)
     if existing is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="同じ工番が既に存在します"
+        if existing.archived_at is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="同じ工番が既に存在します"
+            )
+        # アーカイブ済み工番の再登録 → 自動復活 (行は温存、archived_at のみ解除)
+        existing.archived_at = None
+        await db.flush()
+        await write_action_log(
+            db,
+            actor=client_actor(request),
+            action_type="job.unarchive",
+            job_id=existing.id,
+            payload={"job_id": existing.id, "reason": "re-register"},
         )
+        return await get_job(existing.id, False, db)
     job = Job(**body.model_dump())
     db.add(job)
     await db.flush()
@@ -483,4 +520,51 @@ async def update_job(
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(job, k, v)
     await db.flush()
-    return await get_job(job_id, db)
+    return await get_job(job_id, False, db)
+
+
+# ─────────────────────────────────────────────────────────────
+# 工番の論理アーカイブ (削除ボタン):
+#   - archive   : archived_at = now()。実ファイル・DB 行は絶対に消さない (CLAUDE.md §2.1)
+#   - unarchive : archived_at = NULL (復元)
+# ─────────────────────────────────────────────────────────────
+
+
+@router.patch("/{job_id}/archive", response_model=JobRead)
+async def archive_job(
+    job_id: str, request: Request, db: AsyncSession = Depends(get_db)
+) -> JobRead:
+    job = await db.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工番が見つかりません")
+    if job.archived_at is None:
+        job.archived_at = datetime.now(UTC)
+        await db.flush()
+        await write_action_log(
+            db,
+            actor=client_actor(request),
+            action_type="job.archive",
+            job_id=job.id,
+            payload={"job_id": job.id},
+        )
+    return await get_job(job_id, False, db)
+
+
+@router.patch("/{job_id}/unarchive", response_model=JobRead)
+async def unarchive_job(
+    job_id: str, request: Request, db: AsyncSession = Depends(get_db)
+) -> JobRead:
+    job = await db.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工番が見つかりません")
+    if job.archived_at is not None:
+        job.archived_at = None
+        await db.flush()
+        await write_action_log(
+            db,
+            actor=client_actor(request),
+            action_type="job.unarchive",
+            job_id=job.id,
+            payload={"job_id": job.id},
+        )
+    return await get_job(job_id, False, db)

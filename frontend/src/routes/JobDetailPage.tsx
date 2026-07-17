@@ -13,10 +13,17 @@
 //  - PdfViewer を React.lazy 化して初期バンドルから pdf-lib / pdfjs を分離
 //  - タブレット縦 (md: 未満) 向けのレイアウト: DXF サイドペインをフッターに畳む
 //  - タッチターゲットを 40px 以上に拡大、アコーディオン操作を指でも開けるサイズに
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useEffect, useState, lazy, Suspense } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useJob, type AxisRead } from "../api/jobs";
+import {
+  useJob,
+  useArchiveJob,
+  useUnarchiveJob,
+  useArchiveAxis,
+  useUnarchiveAxis,
+  type AxisRead,
+} from "../api/jobs";
 import { DxfFileList } from "../components/DxfFileList";
 import { ReleaseModal } from "../components/ReleaseModal";
 import { NewAxisModal } from "../components/NewAxisModal";
@@ -46,9 +53,17 @@ const TAB_LABELS: Record<Exclude<ActiveTab, null>, string> = {
 
 export function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
-  const { data: job, isLoading, error } = useJob(jobId);
+  // 復元パネル用にアーカイブ済みの軸も取得し、表示側でアクティブ軸に絞る
+  const { data: job, isLoading, error } = useJob(jobId, true);
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const archiveJob = useArchiveJob();
+  const unarchiveJob = useUnarchiveJob();
+  const archiveAxis = useArchiveAxis();
+  const unarchiveAxis = useUnarchiveAxis();
   const [activeAxisId, setActiveAxisId] = useState<number | null>(null);
+  // アーカイブ済みの軸を一覧して復元するモーダル
+  const [archivedAxesOpen, setArchivedAxesOpen] = useState(false);
   // 既定で「折りたたみ」(右ペイン非表示)。
   // - DXF 一覧が常時開いていると工程詳細やビューアの作業領域が狭くなる
   // - 必要時に右の「DXF」ボタンで開けば良い
@@ -91,10 +106,37 @@ export function JobDetailPage() {
     return <p className="text-red-600 text-sm p-6">エラー: {(error as Error).message}</p>;
   if (!job) return null;
 
+  // アクティブ軸 (タブ表示対象) とアーカイブ済み軸 (復元パネル対象) に分離。
+  const activeAxes = job.axes.filter((a) => a.archived_at === null);
+  const archivedAxes = job.axes.filter((a) => a.archived_at !== null);
+
   // 軸を sort_order で並べた配列。モバイル用 prev/next 軸切替で利用。
-  const sortedAxes = [...job.axes].sort((a, b) => a.sort_order - b.sort_order);
+  const sortedAxes = [...activeAxes].sort((a, b) => a.sort_order - b.sort_order);
   const axis: AxisRead | undefined =
     sortedAxes.find((a) => a.id === activeAxisId) ?? sortedAxes[0];
+
+  const onDeleteJob = () => {
+    const ok = window.confirm(
+      `工番 ${job.id} を削除しますか？\n\n` +
+        "一覧から非表示になります (実際のPDF/DXFファイルは削除されません)。\n" +
+        "工番一覧の「アーカイブ済み」からいつでも復元できます。",
+    );
+    if (!ok) return;
+    archiveJob.mutate(job.id, {
+      onSuccess: () => navigate("/"),
+    });
+  };
+
+  const onDeleteAxis = () => {
+    if (!axis) return;
+    const ok = window.confirm(
+      `軸「${axis.name}」を削除しますか？\n\n` +
+        "この軸の図面・DXF・関連資料はまとめて非表示になります\n" +
+        "(実際のファイルは削除されません)。いつでも復元できます。",
+    );
+    if (!ok) return;
+    archiveAxis.mutate({ jobId: job.id, axisId: axis.id });
+  };
   const axisIdx = axis ? sortedAxes.findIndex((a) => a.id === axis.id) : -1;
   const prevAxis = (): void => {
     if (axisIdx > 0) {
@@ -193,12 +235,40 @@ export function JobDetailPage() {
               {job.delivery_date && `納期 ${job.delivery_date.slice(5).replace("-", "/")}`}
             </span>
             {/* 現場モード廃止 (Phase G 実装したが業務利用見送り)。 */}
+            {job.archived_at === null ? (
+              <button
+                type="button"
+                onClick={onDeleteJob}
+                disabled={archiveJob.isPending}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-hair text-xs text-ink3 hover:border-red-300 hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+                title="工番を削除 (ファイルは消えません。復元可能)"
+              >
+                🗑 工番を削除
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => unarchiveJob.mutate(job.id)}
+                disabled={unarchiveJob.isPending}
+                className="inline-flex items-center px-2.5 py-1 rounded-md border border-accent text-xs text-accent hover:bg-cyan-50 transition disabled:opacity-50"
+                title="工番を復元 (一覧に戻す)"
+              >
+                復元
+              </button>
+            )}
           </span>
         </div>
 
+        {/* アーカイブ済み工番を直接開いた場合の注意バナー */}
+        {job.archived_at !== null && (
+          <div className="px-4 md:px-6 py-1.5 border-t border-hair bg-bg text-xs text-ink2">
+            この工番は削除 (アーカイブ) 済みです。一覧には表示されません。右上の「復元」で戻せます。
+          </div>
+        )}
+
         {/* Phase H A3: 軸タブ + アクション行をコンパクト化 (py-2 → py-1.5, ボタン py-1 → py-0.5) */}
         <div className="px-4 md:px-6 py-1.5 flex flex-wrap items-center gap-2 border-t border-hair">
-          {job.axes.map((a) => (
+          {sortedAxes.map((a) => (
             <button
               key={a.id}
               type="button"
@@ -222,6 +292,27 @@ export function JobDetailPage() {
           >
             + 軸追加
           </button>
+          {axis && (
+            <button
+              type="button"
+              onClick={onDeleteAxis}
+              disabled={archiveAxis.isPending}
+              className="px-3 py-2 md:py-0.5 rounded-pill text-sm border border-hair text-ink3 hover:border-red-300 hover:text-red-600 hover:bg-red-50 transition min-h-[40px] md:min-h-0 disabled:opacity-50"
+              title={`選択中の軸「${axis.name}」を削除 (ファイルは消えません。復元可能)`}
+            >
+              🗑 この軸を削除
+            </button>
+          )}
+          {archivedAxes.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setArchivedAxesOpen(true)}
+              className="px-3 py-2 md:py-0.5 rounded-pill text-xs border border-hair text-ink3 hover:border-accent hover:text-accent min-h-[40px] md:min-h-0"
+              title="削除 (アーカイブ) した軸を一覧して復元"
+            >
+              アーカイブ済みの軸 ({archivedAxes.length})
+            </button>
+          )}
           {/* 管理系タブ (関連資料 / 差替図面 / 部品リスト):
               PC のみ表示。モバイルはビューア専用にして画面領域を広く取るため非表示。 */}
           <span className="ml-auto hidden md:flex items-center gap-1 flex-wrap">
@@ -466,6 +557,56 @@ export function JobDetailPage() {
         jobId={job.id}
         nextSortOrder={(job.axes[job.axes.length - 1]?.sort_order ?? 0) + 1}
       />
+
+      {/* アーカイブ済みの軸: 一覧 + 復元 */}
+      <Modal
+        open={archivedAxesOpen}
+        onClose={() => setArchivedAxesOpen(false)}
+        title="アーカイブ済みの軸"
+        width="560px"
+      >
+        <div className="space-y-2">
+          <p className="text-xs text-ink3">
+            削除 (アーカイブ) した軸の一覧です。「復元」で軸タブに戻せます。
+            図面・DXF・関連資料もそのまま戻ります。
+          </p>
+          {archivedAxes.length === 0 && (
+            <p className="text-sm text-ink3">アーカイブ済みの軸はありません。</p>
+          )}
+          {archivedAxes.map((a) => (
+            <div
+              key={a.id}
+              className="flex items-center gap-3 border border-hair rounded-md px-3 py-2"
+            >
+              <span className="text-sm text-ink font-medium">{a.name}</span>
+              {a.current_version_no != null && (
+                <span className="text-[10px] text-ink3">v{a.current_version_no}</span>
+              )}
+              <span className="text-[11px] text-ink4">
+                削除日 {a.archived_at?.slice(0, 10)}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  unarchiveAxis.mutate(
+                    { jobId: job.id, axisId: a.id },
+                    {
+                      onSuccess: () => {
+                        // 最後の 1 件を復元したらモーダルを閉じる
+                        if (archivedAxes.length <= 1) setArchivedAxesOpen(false);
+                      },
+                    },
+                  )
+                }
+                disabled={unarchiveAxis.isPending}
+                className="ml-auto px-2.5 py-1 rounded-md border border-accent text-xs text-accent hover:bg-cyan-50 transition disabled:opacity-50"
+              >
+                復元
+              </button>
+            </div>
+          ))}
+        </div>
+      </Modal>
 
       {/* 工番別指示書 Modal: Job 単位 (軸非依存) のため axis && ブロックの外に置く。
           未出図・軸未登録の Job でも開ける (契約 §3.1)。 */}

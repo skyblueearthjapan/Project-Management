@@ -50,6 +50,8 @@ class Axis(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+    # 論理アーカイブ (削除ボタン)。実ファイル・DB 行は消さない (CLAUDE.md §2.1)。
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     job: Mapped[Job] = relationship(back_populates="axes")
     versions: Mapped[list[Version]] = relationship(
@@ -74,3 +76,4 @@ class Axis(Base):
 
 
 Index("ix_axes_job_id", Axis.job_id)
+Index("ix_axes_archived_at", Axis.archived_at)

@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   useJobs,
+  useArchiveJob,
+  useUnarchiveJob,
   type SortKey,
   type JobRead,
 } from "../api/jobs";
@@ -113,12 +115,30 @@ function CoverThumb({ versionId }: { versionId: number | null }) {
  * 工番ごとに独立した state を持つため、別コンポーネントとして切出している。
  */
 function JobRowBody({ job }: { job: JobRead }) {
+  const archiveJob = useArchiveJob();
+  const unarchiveJob = useUnarchiveJob();
+  const isArchived = job.archived_at !== null;
   const sortedAxes = [...job.axes].sort((a, b) => a.sort_order - b.sort_order);
   const firstAxisId = sortedAxes[0]?.id ?? 0;
   const [selectedAxisId, setSelectedAxisId] = useState<number>(firstAxisId);
   // データ更新で軸構成が変わった場合のフォールバック
   const selectedAxis =
     sortedAxes.find((a) => a.id === selectedAxisId) ?? sortedAxes[0];
+
+  const onDelete = (e: MouseEvent) => {
+    e.stopPropagation();
+    const ok = window.confirm(
+      `工番 ${job.id} を削除しますか？\n\n` +
+        "一覧から非表示になります (実際のPDF/DXFファイルは削除されません)。\n" +
+        "「アーカイブ済み」表示からいつでも復元できます。",
+    );
+    if (ok) archiveJob.mutate(job.id);
+  };
+
+  const onRestore = (e: MouseEvent) => {
+    e.stopPropagation();
+    unarchiveJob.mutate(job.id);
+  };
 
   // 右上の % は「選択中の軸」のみの進捗 (軸タブ切替で変化)。
   // ユーザー要望により、工番一覧では軸単位の数字を主体に据える。
@@ -152,6 +172,11 @@ function JobRowBody({ job }: { job: JobRead }) {
           <span className="hidden md:inline text-ink4 text-xs">
             · {job.axes.length}軸
           </span>
+          {isArchived && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-pill bg-bg text-ink3 border border-hair">
+              アーカイブ済み
+            </span>
+          )}
           <span className="hidden md:inline ml-auto text-xs">
             <DueDisplay deliveryDate={job.delivery_date} />
           </span>
@@ -159,6 +184,29 @@ function JobRowBody({ job }: { job: JobRead }) {
             {pct}
             <span className="text-xs text-ink3 font-normal">%</span>
           </span>
+          {/* 削除 (アーカイブ) / 復元 ボタン。行クリック (詳細遷移) と分離するため
+              stopPropagation する。PC のみ表示 (モバイルは閲覧専用)。 */}
+          {isArchived ? (
+            <button
+              type="button"
+              onClick={onRestore}
+              disabled={unarchiveJob.isPending}
+              className="hidden md:inline-flex items-center px-2.5 py-1 rounded-md border border-accent text-xs text-accent hover:bg-cyan-50 transition disabled:opacity-50"
+              title="工番を復元 (一覧に戻す)"
+            >
+              復元
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={archiveJob.isPending}
+              className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-hair text-xs text-ink3 hover:border-red-300 hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+              title="工番を削除 (ファイルは消えません。復元可能)"
+            >
+              🗑 削除
+            </button>
+          )}
         </div>
 
         {/* 以下 (軸タブ / 進捗バー / 押印グリッド) はすべて PC のみ表示。
@@ -195,8 +243,14 @@ export function JobsListPage() {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<UiSort>("due");
   const [newOpen, setNewOpen] = useState(false);
+  // 「アーカイブ済み」表示モード: 削除ボタンで非表示化した工番だけを一覧し、復元できる
+  const [showArchived, setShowArchived] = useState(false);
 
-  const { data, isLoading, error } = useJobs({ q, sort });
+  const { data, isLoading, error } = useJobs({
+    q,
+    sort,
+    filter: showArchived ? "archived" : "all",
+  });
   const navigate = useNavigate();
 
   const showingCount = useMemo(() => data?.items.length ?? 0, [data]);
@@ -209,7 +263,9 @@ export function JobsListPage() {
       <div className="shrink-0 pt-6 pb-3 space-y-3">
         {/* ページタイトル + 件数 */}
         <div className="flex items-baseline gap-3">
-          <h1 className="text-lg font-semibold">工番</h1>
+          <h1 className="text-lg font-semibold">
+            {showArchived ? "アーカイブ済みの工番" : "工番"}
+          </h1>
           <div className="text-xs text-ink3">{data ? `${data.total}件` : "..."}</div>
         </div>
 
@@ -234,8 +290,21 @@ export function JobsListPage() {
             </select>
           </div>
           <button
+            type="button"
+            onClick={() => setShowArchived((v) => !v)}
+            aria-pressed={showArchived}
+            className={`ml-auto px-3 py-1.5 rounded-md border text-sm transition ${
+              showArchived
+                ? "bg-cyan-50 border-accent text-accent"
+                : "border-hair text-ink3 hover:border-accent hover:text-accent"
+            }`}
+            title="削除 (アーカイブ) した工番の表示/非表示を切り替え"
+          >
+            {showArchived ? "← 通常の一覧に戻る" : "アーカイブ済み"}
+          </button>
+          <button
             onClick={() => setNewOpen(true)}
-            className="ml-auto px-3 py-1.5 rounded-md bg-accent text-white text-sm hover:bg-cyan-600"
+            className="px-3 py-1.5 rounded-md bg-accent text-white text-sm hover:bg-cyan-600"
           >
             + 新規工番
           </button>

@@ -30,6 +30,8 @@ class AxisRead(ORMModel):
     current_version_link_broken: bool = False
     # Phase N-2: 軸ごとの電子データネーム印
     phase_stamps: list[AxisPhaseStampRead] = []
+    # 論理アーカイブ (削除ボタン)。NULL = アクティブ。
+    archived_at: datetime | None = None
 
 
 class JobBase(BaseModel):
@@ -70,6 +72,8 @@ class JobRead(ORMModel):
     status: str
     created_at: datetime
     updated_at: datetime
+    # 論理アーカイブ (削除ボタン)。NULL = アクティブ。
+    archived_at: datetime | None = None
     axes: list[AxisRead] = []
     # Phase N: 工程ごとの電子データネーム印 (期日 / 押印情報)
     phase_stamps: list[PhaseStampRead] = []

@@ -91,6 +91,10 @@ async def _get_or_create_job(db: AsyncSession, body: ShutsuzuRegisterIn) -> tupl
     """
     job = await db.get(Job, body.job_id)
     if job is not None:
+        # アーカイブ済み工番への再出図 → 自動復活 (行は温存、archived_at のみ解除)。
+        if job.archived_at is not None:
+            job.archived_at = None
+            await db.flush()
         return job, False
 
     master = await db.get(JobMasterCache, body.job_id)
@@ -162,6 +166,10 @@ async def _get_or_create_axis(db: AsyncSession, job_id: str, name: str) -> tuple
         await db.execute(select(Axis).where(Axis.job_id == job_id, Axis.name == name))
     ).scalar_one_or_none()
     if axis is not None:
+        # アーカイブ済み軸への再出図 → 自動復活。
+        if axis.archived_at is not None:
+            axis.archived_at = None
+            await db.flush()
         return axis, False
 
     try:

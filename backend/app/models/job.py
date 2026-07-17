@@ -36,6 +36,8 @@ class Job(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+    # 論理アーカイブ (削除ボタン)。実ファイル・DB 行は消さない (CLAUDE.md §2.1)。
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     axes: Mapped[list[Axis]] = relationship(
         back_populates="job", cascade="save-update, merge", order_by="Axis.sort_order"
@@ -49,3 +51,4 @@ class Job(Base):
 
 Index("ix_jobs_delivery_date", Job.delivery_date)
 Index("ix_jobs_starred_status", Job.starred, Job.status)
+Index("ix_jobs_archived_at", Job.archived_at)
