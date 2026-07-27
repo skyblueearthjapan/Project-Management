@@ -100,6 +100,13 @@ async def test_create_job_and_axis_and_progress(client: AsyncClient) -> None:
     assert any(j["id"] == "NK24-051" for j in r.json()["items"])
 
 
+@pytest.mark.skip(
+    reason=(
+        "メール機能は 2026-05-27 の方針転換でアプリから全廃済 "
+        "(docs/REFACTOR_REMOVE_MAIL.md)。/mail/compose は存在しないため常に 404。"
+        "CLAUDE.md §2.1 の方針に倣いテストは削除せず skip で残す。"
+    )
+)
 @pytest.mark.asyncio
 async def test_mail_compose_eml(client: AsyncClient, tmp_path, monkeypatch) -> None:
     # uploads を tmp に切替

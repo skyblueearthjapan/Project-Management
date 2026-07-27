@@ -17,13 +17,17 @@ class Base(DeclarativeBase):
 
 
 _settings = get_settings()
-engine = create_async_engine(
-    _settings.database_url,
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,
-    echo=False,
-)
+
+# SQLite (テストの in-memory DB) は StaticPool を使うため `pool_size` /
+# `max_overflow` を受け付けず、渡すと import 時点で TypeError になる。
+# これによりテストが 1 件も収集できない状態だったため、方言で出し分ける。
+# 本番 (PostgreSQL) のプール設定は従来どおり。
+_engine_kwargs: dict[str, object] = {"pool_pre_ping": True, "echo": False}
+if not _settings.database_url.startswith("sqlite"):
+    _engine_kwargs["pool_size"] = 10
+    _engine_kwargs["max_overflow"] = 20
+
+engine = create_async_engine(_settings.database_url, **_engine_kwargs)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
