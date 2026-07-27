@@ -599,6 +599,52 @@ class App(tk.Tk):
             return None
         return job_id, kubun_for_role(self.current_role)
 
+    def _confirm_role_matches_kouban(self, job_id: str, kubun: str) -> bool:
+        """役割選択と図面ファイル名の工番プレフィックスの食い違いを、実行前に確認する。
+
+        ``kubun`` は画面の役割選択だけで決まり（``kubun_for_role``）、ファイル名から
+        抽出した工番とは独立している。役割の選択ミスは実際に発生しており、TS を選ぶと
+        DOVE に加えて TTD にも登録される。登録は冪等だが**取り消せない**ため、
+        食い違いを検出したら既定［いいえ］の確認ダイアログで気づかせる。
+
+        Returns:
+            続行してよければ True。ユーザーが中止を選んだら False。
+        """
+        prefixes: set[str] = set()
+        for ax in self.axes:
+            if not ax["pdf_unc"]:
+                continue
+            prefix, _key = extract_kouban_from_filename(os.path.basename(ax["pdf_unc"]))
+            if prefix:
+                prefixes.add(prefix)
+        if not prefixes:
+            return True
+
+        found = "／".join(sorted(prefixes))
+        if kubun == "TS" and "TS" not in prefixes:
+            detail = (
+                f"役割は「TS工番」ですが、図面の工番は {found}（工番 {job_id}）です。\n\n"
+                "このまま進めると、この工番は DOVE に加えて\n"
+                "TTD（TSC出張図面管理）にも登録されます。\n"
+                "登録は取り消せません（TTD側で個別に削除操作が必要です）。\n"
+                "メールの宛先も TS工番向けメンバーになります。"
+            )
+        elif kubun == "LW" and "TS" in prefixes:
+            detail = (
+                f"役割は「LW工番」ですが、図面は TS工番（工番 {job_id}）です。\n\n"
+                "このまま進めると TTD（TSC出張図面管理）には登録されません。\n"
+                "メールの宛先も LW工番向けメンバーになります。"
+            )
+        else:
+            return True
+
+        return messagebox.askyesno(
+            APP_TITLE,
+            f"{detail}\n\nこのまま続行しますか？\n（［いいえ］で中止し、役割を選び直せます）",
+            icon=messagebox.WARNING,
+            default=messagebox.NO,
+        )
+
     def _fetch_master(self, job_id: str) -> dict[str, Any] | None:
         # 1) 工番マスタ Excel（新一覧/日程表A・ファイルサーバ固定パス）= 元アプリと同方式。
         try:
@@ -712,6 +758,13 @@ class App(tk.Tk):
         if resolved is None:
             return
         job_id, kubun = resolved
+
+        # 役割の選択ミス（例: TS工番を選んだまま LW の図面を処理）を実行前に警告する。
+        # 3モードとも DOVE 登録を伴い、TS では TTD にも登録されて取り消せないため、
+        # メールを作る前・登録する前のこの位置で止める。
+        if not self._confirm_role_matches_kouban(job_id, kubun):
+            self.var_status.set("役割と図面の工番が一致しないため中止しました")
+            return
 
         # 宛先はメールを作るモード（send/draft）でのみ必須。
         to_list, cc_list = get_recipients(self.members, self.current_role)
