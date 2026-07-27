@@ -58,6 +58,13 @@ tools/shutsuzu-agent/*.spec
 tools/shutsuzu-agent/送付先一覧.xlsx
 tools/shutsuzu-agent/config.toml
 
+# kounyuu-agent (PyInstaller) ビルド成果物
+tools/kounyuu-agent/.venv/
+tools/kounyuu-agent/build/
+tools/kounyuu-agent/dist/
+tools/kounyuu-agent/*.spec
+tools/kounyuu-agent/config.toml
+
 # Misc
 # _design_bundle/ と Sampleデータ/ はユーザー指示により追跡 (private repo)
 .omc/

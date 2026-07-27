@@ -1,0 +1,29 @@
+[project]
+name = "pm-kounyuu-agent"
+version = "0.1.0"
+description = "Project Management - 購入部品追加依頼 × DOVE連携 エージェント (Windows EXE)"
+requires-python = ">=3.11"
+dependencies = [
+    "openpyxl>=3.1",
+    "requests>=2.32",
+    "pywin32>=306; platform_system=='Windows'",
+]
+
+[project.optional-dependencies]
+build = [
+    "pyinstaller>=6.10",
+]
+dev = [
+    "ruff>=0.6",
+    "pytest>=8.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "A", "C4", "T20", "PT", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
