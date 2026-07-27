@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -46,18 +45,9 @@ from app.services.link_check import (
     TARGET_RELATED_DOC,
     latest_link_status,
 )
+from app.services.uploads import safe_filename, save_uploaded_file
 
 router = APIRouter()
-
-
-def _safe_filename(name: str) -> str:
-    """アップロードファイル名から危険な文字を除いた最終ファイル名を返す。"""
-    # path separator や `..` を除去 (Path Traversal 防止)
-    p = Path(name)
-    base = p.name
-    # 制御文字や Windows 予約文字を「_」に
-    bad = set('<>:"/\\|?*\x00')
-    return "".join("_" if c in bad else c for c in base)[:128] or "file.bin"
 
 
 async def _ensure_axis(db: AsyncSession, job_id: str, axis_id: int) -> Axis:
@@ -274,7 +264,7 @@ async def upload_pdf_replacement(
 
     settings = get_settings()
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
-    safe = _safe_filename(file.filename or "replacement.pdf")
+    safe = safe_filename(file.filename or "replacement.pdf")
     if not safe.lower().endswith(".pdf"):
         safe = f"{safe}.pdf"
     stem = Path(safe).stem
@@ -321,70 +311,6 @@ async def upload_pdf_replacement(
     return PdfReplacementRead.model_validate(rep)
 
 
-def _exclusive_write_bytes(path: Path, data: bytes) -> None:
-    """`open(path, "xb")` で排他作成。
-
-    CLAUDE.md §2.1 / §2.2: 既存ファイルがあれば `FileExistsError` を投げて
-    上書きを拒否する。呼び出し側は 409 に変換する。
-    aiofiles は "xb" を安定サポートしていないため同期 open + `to_thread` で
-    event loop をブロックしないようにする。
-    """
-    with open(path, "xb") as f:
-        f.write(data)
-
-
-_MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-
-
-async def _save_uploaded_file(
-    upload: UploadFile, *, sub_dir: Path, allowed_ext: set[str] | None = None
-) -> tuple[Path, str, int]:
-    """`/mnt/uploads/{sub_dir}/` 配下に排他作成で保存し (rel_path, abs_path, size) を返す。
-
-    保存ファイル名: `{stem}__{yyyymmddHHMMSS}{ext}` で衝突時のリトライ余地を確保。
-    """
-    settings = get_settings()
-    safe = _safe_filename(upload.filename or "upload.bin")
-    ext = Path(safe).suffix.lower()
-    if allowed_ext is not None and ext not in allowed_ext:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"許可されていない拡張子です: {ext or '(無拡張子)'}",
-        )
-    content = await upload.read()
-    if len(content) > _MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="50MB を超えるファイルは受け付けません",
-        )
-
-    ts = datetime.now().strftime("%Y%m%d%H%M%S")
-    stem = Path(safe).stem
-    out_name = f"{stem}__{ts}{ext}"
-    rel_path = sub_dir / out_name
-    abs_path = resolve_under(settings.upload_dir, str(rel_path))
-    abs_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        await asyncio.to_thread(_exclusive_write_bytes, abs_path, content)
-    except FileExistsError as exc:
-        # 1 秒以内の同名連打のみ起こり得る。タイムスタンプ + サフィックスで再試行。
-        for attempt in range(1, 6):
-            out_name = f"{stem}__{ts}-{attempt}{ext}"
-            rel_path = sub_dir / out_name
-            abs_path = resolve_under(settings.upload_dir, str(rel_path))
-            try:
-                await asyncio.to_thread(_exclusive_write_bytes, abs_path, content)
-                break
-            except FileExistsError:
-                continue
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="同名ファイルが連続衝突しました。しばらく待って再試行してください。",
-            ) from exc
-    return rel_path, str(rel_path).replace("\\", "/"), len(content)
-
-
 @router.post(
     "/{job_id}/axes/{axis_id}/related-docs/upload",
     response_model=RelatedDocRead,
@@ -405,7 +331,7 @@ async def upload_related_doc(
     """
     await _ensure_axis(db, job_id, axis_id)
     sub_dir = Path("related-docs") / job_id / str(axis_id)
-    _rel_path, rel_str, size = await _save_uploaded_file(file, sub_dir=sub_dir)
+    _rel_path, rel_str, size = await save_uploaded_file(file, sub_dir=sub_dir)
 
     doc = RelatedDoc(
         axis_id=axis_id,
@@ -455,7 +381,7 @@ async def upload_parts_list_version(
     """
     await _ensure_axis(db, job_id, axis_id)
     sub_dir = Path("parts-lists") / job_id / str(axis_id)
-    _rel_path, rel_str, _size = await _save_uploaded_file(file, sub_dir=sub_dir)
+    _rel_path, rel_str, _size = await save_uploaded_file(file, sub_dir=sub_dir)
 
     pl = (
         await db.execute(select(PartsList).where(PartsList.axis_id == axis_id))

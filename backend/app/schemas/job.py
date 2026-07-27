@@ -74,6 +74,9 @@ class JobRead(ORMModel):
     updated_at: datetime
     # 論理アーカイブ (削除ボタン)。NULL = アクティブ。
     archived_at: datetime | None = None
+    # 発生元: shutsuzu (出図) / purchase (購入部品依頼だけで発生) / manual (画面から追加)。
+    # "purchase" は一覧・件数・検索から除外されるため、通常この API では返らない。
+    origin: str = "shutsuzu"
     axes: list[AxisRead] = []
     # Phase N: 工程ごとの電子データネーム印 (期日 / 押印情報)
     phase_stamps: list[PhaseStampRead] = []

@@ -38,6 +38,13 @@ class Job(Base):
     )
     # 論理アーカイブ (削除ボタン)。実ファイル・DB 行は消さない (CLAUDE.md §2.1)。
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 発生元: shutsuzu (出図) / purchase (購入部品依頼だけで発生) / manual (画面から手動追加)。
+    # purchase は工番一覧・件数・検索の既定表示から除外する (jobs.py の _filtered)。
+    # DB には記録しつつ UI には出さない、という方針を 1 列で表現する。
+    # 後から出図された時点で shutsuzu へ昇格する (services/shutsuzu.py の get-or-create)。
+    origin: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="shutsuzu"
+    )
 
     axes: Mapped[list[Axis]] = relationship(
         back_populates="job", cascade="save-update, merge", order_by="Axis.sort_order"
@@ -52,3 +59,4 @@ class Job(Base):
 Index("ix_jobs_delivery_date", Job.delivery_date)
 Index("ix_jobs_starred_status", Job.starred, Job.status)
 Index("ix_jobs_archived_at", Job.archived_at)
+Index("ix_jobs_origin", Job.origin)

@@ -95,6 +95,12 @@ async def _get_or_create_job(db: AsyncSession, body: ShutsuzuRegisterIn) -> tupl
         if job.archived_at is not None:
             job.archived_at = None
             await db.flush()
+        # 購入部品依頼だけで発生していた工番が出図された → 工番一覧に出す。
+        # origin="purchase" は一覧・件数・検索から除外されるため、ここで昇格しないと
+        # 「出図したのに一覧に出ない」という分かりにくい事故になる。
+        if job.origin == "purchase":
+            job.origin = "shutsuzu"
+            await db.flush()
         return job, False
 
     master = await db.get(JobMasterCache, body.job_id)

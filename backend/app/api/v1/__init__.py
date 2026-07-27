@@ -13,6 +13,7 @@ from app.api.v1 import (
     link_check,
     pdf_rotations,
     progress,
+    purchase_requests,
     shutsuzu,
     workers,
 )
@@ -35,6 +36,10 @@ api_router.include_router(progress.router, prefix="/progress", tags=["progress"]
 api_router.include_router(files.router, prefix="/files", tags=["files"])
 # 出図のお知らせ × DOVE連携: 合成登録 + 工番別指示書 (Job単位) CRUD
 api_router.include_router(shutsuzu.router, prefix="/shutsuzu", tags=["shutsuzu"])
+# 購入部品追加依頼: 設計部員 → 資材購買 → 設計部員 の往復とステータス管理
+api_router.include_router(
+    purchase_requests.router, prefix="/purchase-requests", tags=["purchase-requests"]
+)
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 # Phase D: 軸限定の即時リンクチェック (フロント「再チェック」ボタン用)
 api_router.include_router(link_check.router, prefix="/link-check", tags=["link-check"])

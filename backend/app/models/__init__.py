@@ -24,6 +24,7 @@ from app.models.job_phase_stamp import JobPhaseStamp
 from app.models.mail import MailLog, MailLogRecipient, MailTemplate
 from app.models.pdf_rotation import PdfRotation
 from app.models.progress import AxisProgress, ProgressStep
+from app.models.purchase_request import PurchaseRequest, PurchaseRequestReply
 from app.models.system import LinkCheckResult, SystemSetting, User
 from app.models.version import Version
 from app.models.worker import Worker
@@ -50,6 +51,8 @@ __all__ = [
     "PdfReplacement",
     "PdfRotation",
     "ProgressStep",
+    "PurchaseRequest",
+    "PurchaseRequestReply",
     "RelatedDoc",
     "SystemSetting",
     "User",

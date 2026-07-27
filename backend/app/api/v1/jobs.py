@@ -176,6 +176,18 @@ def _serialize_axis(
 
 
 def _filtered(stmt, q: str | None, filt: str, today):
+    # 購入部品依頼だけで発生した工番 (origin="purchase") は、一覧・件数・検索の
+    # いずれにも既定では出さない (要件 D-07)。図面が 1 枚も無い工番が大量に並ぶと
+    # 出図管理としての見通しが落ちるため。DB には記録されており、filt="purchase" で
+    # 明示的に呼べば取得できる (UI のフィルタタブには出さない保守用の逃げ道)。
+    #
+    # ★ この関数は GET /jobs と GET /jobs/counts の両方が通る唯一の経路。
+    #   ここ 1 箇所に条件を置くことで、一覧・件数・検索の 3 経路に同時に効かせる。
+    #   除外漏れは tests/test_purchase_request_visibility.py で固定している。
+    if filt == "purchase":
+        stmt = stmt.where(Job.origin == "purchase")
+    else:
+        stmt = stmt.where(Job.origin != "purchase")
     # 論理アーカイブ: "archived" フィルタのみアーカイブ済を返し、
     # それ以外のフィルタは常にアクティブ (archived_at IS NULL) に限定する。
     if filt == "archived":
@@ -302,7 +314,10 @@ async def list_counts(
 async def list_jobs(
     q: str | None = Query(default=None, description="フリーテキスト検索"),
     # Phase A 刈り込み: "starred" は pattern から除外 (★ お気に入り機能廃止 — Round 3 合意)
-    filter: str = Query(default="all", pattern="^(all|inprog|over|thisweek|archived)$"),
+    # "purchase" は UI のフィルタタブには出さない保守用の値 (購入依頼だけで発生した工番)。
+    filter: str = Query(
+        default="all", pattern="^(all|inprog|over|thisweek|archived|purchase)$"
+    ),
     sort: str = Query(default="due", pattern="^(due|id|progress)$"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
@@ -474,6 +489,9 @@ async def create_job(
             )
         # アーカイブ済み工番の再登録 → 自動復活 (行は温存、archived_at のみ解除)
         existing.archived_at = None
+        # 購入依頼だけで発生していた工番を画面から登録した → 一覧に出す。
+        if existing.origin == "purchase":
+            existing.origin = "manual"
         await db.flush()
         await write_action_log(
             db,
@@ -483,7 +501,9 @@ async def create_job(
             payload={"job_id": existing.id, "reason": "re-register"},
         )
         return await get_job(existing.id, False, db)
-    job = Job(**body.model_dump())
+    # 画面 (「+ 新規工番」) からの登録は origin="manual"。
+    # 一覧から除外されるのは "purchase" だけなので表示挙動は従来どおり。
+    job = Job(**body.model_dump(), origin="manual")
     db.add(job)
     await db.flush()
 
