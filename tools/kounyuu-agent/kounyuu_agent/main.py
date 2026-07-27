@@ -39,12 +39,18 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 
 def load_config(base_dir: str) -> dict[str, Any]:
-    """config.toml を読み、欠落キーは既定値で補完する。"""
+    """config.toml を読み、欠落キーは既定値で補完する。
+
+    **BOM 付き UTF-8 を許容する**: Windows のメモ帳等で編集すると先頭に BOM が
+    付くことがあり、`tomllib.load()` (バイナリ読み) はこれを解釈できず
+    `TOMLDecodeError: Invalid statement (at line 1, column 1)` で落ちる。
+    実運用で確実に踏むため、`utf-8-sig` でテキストとして読んでから解析する。
+    """
     cfg = dict(DEFAULT_CONFIG)
     path = os.path.join(base_dir, "config.toml")
     if os.path.isfile(path):
-        with open(path, "rb") as f:
-            loaded = tomllib.load(f)
+        with open(path, encoding="utf-8-sig") as f:
+            loaded = tomllib.loads(f.read())
         cfg.update({k: v for k, v in loaded.items() if v is not None})
     return cfg
 
@@ -107,7 +113,17 @@ class App(tk.Tk):
 
 def main() -> None:
     base = resource_base_dir()
-    config = load_config(base)
+    try:
+        config = load_config(base)
+    except Exception as e:  # noqa: BLE001 - 設定不備は原因を示して終了する
+        # ここで握らないと PyInstaller の "Unhandled exception" ダイアログになり、
+        # 利用者には何が悪いのか分からない。
+        _error_box(
+            "config.toml を読み込めませんでした。\n\n"
+            f"場所:\n{os.path.join(base, 'config.toml')}\n\n"
+            f"エラー:\n{e}"
+        )
+        return
 
     xlsx = str(config.get("master_xlsx_path") or "")
     if not os.path.isfile(xlsx):
