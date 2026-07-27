@@ -32,6 +32,7 @@ import { RelatedDocsView } from "../components/views/RelatedDocsView";
 import { ReplacementsView } from "../components/views/ReplacementsView";
 import { PartsListView } from "../components/views/PartsListView";
 import { KobanInstructionView } from "../components/views/KobanInstructionView";
+import { PurchaseRequestsView } from "../components/views/PurchaseRequestsView";
 
 // Phase G: PdfViewer は重い (pdf-lib + pdfjs-dist で 1MB+) ため初期バンドルから除外。
 // タブレット回線 / メモリ制約への配慮 + JobDetailPage 以外では使わない依存なので
@@ -42,14 +43,33 @@ const PdfViewer = lazy(() =>
 
 // 出図お知らせ×DOVE連携 (WS-B): "instruction" を追加。
 // 工番別指示書は Job 単位 (軸非依存) のため activeAxisId に依存しない (契約 §3.1)。
-type ActiveTab = null | "instruction" | "related" | "replacements" | "parts";
+// 購入部品追加依頼 (WS-B): "purchase" を追加。これも Job 単位。
+type ActiveTab =
+  | null
+  | "instruction"
+  | "purchase"
+  | "related"
+  | "replacements"
+  | "parts";
 
 const TAB_LABELS: Record<Exclude<ActiveTab, null>, string> = {
   instruction: "工番別指示書",
+  purchase: "購入部品依頼",
   related: "関連資料",
   replacements: "差替図面",
   parts: "部品リスト",
 };
+
+// Job 単位 (軸非依存) のタブ。未出図 Job でも開けるよう、軸依存タブとは
+// Modal の出し分けを分けている。
+const JOB_LEVEL_TABS: ReadonlyArray<Exclude<ActiveTab, null>> = [
+  "instruction",
+  "purchase",
+];
+
+function isJobLevelTab(t: ActiveTab): t is "instruction" | "purchase" {
+  return t !== null && JOB_LEVEL_TABS.includes(t);
+}
 
 export function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -325,6 +345,15 @@ export function JobDetailPage() {
             >
               工番別指示書
             </button>
+            {/* 購入部品追加依頼: Job 単位。閲覧のみ (登録・回答は EXE が主経路)。 */}
+            <button
+              type="button"
+              onClick={() => toggleTab("purchase")}
+              aria-pressed={activeTab === "purchase"}
+              className={tabButtonClass("purchase")}
+            >
+              購入部品依頼
+            </button>
             <button
               type="button"
               onClick={() => toggleTab("related")}
@@ -443,10 +472,10 @@ export function JobDetailPage() {
                   - Modal は背景クリック / Esc で閉じる (Modal コンポーネント側で実装済)
                   - 高さは Modal 内に min-h-[60vh] で確保し、内部スクロールに任せる */}
               <Modal
-                open={!!activeTab && activeTab !== "instruction" && !pdfFullscreen}
+                open={!!activeTab && !isJobLevelTab(activeTab) && !pdfFullscreen}
                 onClose={() => setActiveTab(null)}
                 title={
-                  activeTab && activeTab !== "instruction"
+                  activeTab && !isJobLevelTab(activeTab)
                     ? TAB_LABELS[activeTab]
                     : ""
                 }
@@ -618,6 +647,19 @@ export function JobDetailPage() {
       >
         <div className="h-[60vh] min-h-[420px] flex flex-col">
           <KobanInstructionView jobId={job.id} />
+        </div>
+      </Modal>
+
+      {/* 購入部品依頼 Modal: これも Job 単位。未出図 Job でも開ける。
+          閲覧のみ (登録・回答・ステータス操作は EXE 側が主経路)。 */}
+      <Modal
+        open={activeTab === "purchase" && !pdfFullscreen}
+        onClose={() => setActiveTab(null)}
+        title={TAB_LABELS.purchase}
+        width="960px"
+      >
+        <div className="h-[60vh] min-h-[420px] flex flex-col">
+          <PurchaseRequestsView jobId={job.id} />
         </div>
       </Modal>
     </div>
