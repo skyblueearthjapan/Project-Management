@@ -25,6 +25,13 @@ from .members import Member, split_by_flag
 APP_TITLE = "購入部品追加依頼"
 UNASSIGNED = "(工番未定)"
 
+# 書き込み直後に一覧を取り直すと、まだ古い状態が返ることがある。
+# DOVE は commit を FastAPI の dependency 終了時に行うため、レスポンスを受け取った
+# 時点ではまだ確定していない瞬間がある (実測: 0.3 秒後には確定済み)。
+# 待たずに reload すると「完了したのに未対応のまま」に見えて混乱するので、
+# 書き込み後の再読込だけ少し遅らせる。
+RELOAD_DELAY_MS = 900
+
 
 class PurchaseFrame(ttk.Frame):
     """購買担当モードの画面。"""
@@ -166,7 +173,7 @@ class PurchaseFrame(ttk.Frame):
             messagebox.showerror(APP_TITLE, f"工番の紐づけに失敗しました:\n{e}")
             return
         self.var_status.set(f"依頼#{row['id']} に工番 {job_id} を紐づけました")
-        self.reload()
+        self.after(RELOAD_DELAY_MS, self.reload)
 
     # ------------------------------------------------------------------
     def _reply(self) -> None:
@@ -257,7 +264,7 @@ class PurchaseFrame(ttk.Frame):
             messagebox.showinfo(
                 APP_TITLE, f"手配結果を登録し、依頼#{request_id} を完了にしました。"
             )
-        self.reload()
+        self.after(RELOAD_DELAY_MS, self.reload)
 
     def _retry_register(self) -> None:
         """メールを再送せず、保持済みの内容で登録だけ再試行する (冪等)。"""
